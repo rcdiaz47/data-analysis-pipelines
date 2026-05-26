@@ -9,7 +9,41 @@ library(patchwork)
 library(ggrepel)
 library(vegan)
 
-cd <- read_xlsx("LH_9033517_20260212_RP_Pos_CD_Results.xlsx")
+
+
+#============================================
+# USER CONFIGURATION - Edit this section only
+#=============================================
+
+# Input file path
+
+input_file <- "LH_9033517_20260212_RP_Pos_CD_Results.xlsx"
+
+# Number of groups to be tested in experiment
+# 2 = t-test only
+# 3+ = ANOVAA + Tukey + Pairwise analysis
+
+n_groups <- 2
+
+# Group names must match sample column names
+group_names <- c("NL", "Y")
+
+# Output directory for plots and csv files ("./) for current directory
+output_dir <- "./"
+
+# FDR significant threshold
+fdr_threshold <- 0.05
+
+# Log2fold change threshold for plots
+logfc_threshold <- 1
+
+
+#=========================================
+# END USER CONFIGURATION
+#=========================================
+
+
+cd <- read_xlsx(input_file)
 head(cd)
 
 ## ------ Clean and shorten the metabolite names for readability ------ 
