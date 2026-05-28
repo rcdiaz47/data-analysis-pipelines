@@ -17,7 +17,7 @@ library(vegan)
 
 # Input file path
 
-input_file <- "LH_9033517_20260212_RP_Pos_CD_Results.xlsx"
+input_file <- "C:\\Users\\User\\Desktop\\Data Analysis 2026\\SM_8541713_HILIC_Neg_CD_Results.xlsx"
 
 # Number of groups to be tested in experiment
 # 2 = t-test only
@@ -62,7 +62,7 @@ cd$Name <- process_metabolite_names(cd$Name, max_length = 40)
 
 
 # ----- Build the numeric matrix with the columns we want to use for analyzing ----- 
-area_cols <- grep("^Area:", colnames(cd), value = TRUE)
+area_cols <- grep("^Group Area:", colnames(cd), value = TRUE)
 
 ## Exclude blanks and QCs from the analysis
 area_cols <- area_cols[!grepl("Blank|blank|BLANK|QC|Qc", area_cols)]
@@ -164,18 +164,25 @@ dev.off()
 
 ##------ Exploratory Data Analysis ---------
 
-# ----- build metadata to Begin statistical testing (Anova, t test, PCA) ----- 
-meta <- data.frame(
-  Sample = area_cols, 
-  Group = dplyr::case_when(
-    grepl("NL", area_cols) ~ "NL",
-    grepl("Y", area_cols) ~ "Y"
-  ),
-  stringsAsFactors = FALSE
-)
+# ----- build metadata  ----- 
 
-meta$Group <- factor(meta$Group, levels = c("NL", "Y"))
-meta
+if(n_groups == 2){
+  meta <- data.frame(
+    Sample = area_cols,
+    Group = ifelse(grepl(group_names[1], area_cols), group_names[1], group_names[2]),
+    stringsAsFactors = FALSE
+  )
+} else{
+  meta <- data.frame(
+    Sample = area_cols,
+    Group = sapply(area_cols, function(s){
+      matched <- group_names[sapply(group_names, function(g) grepl(g,s))]
+      if (length(matched) == 1) matched else NA 
+    }),
+    
+    stringsasFactors = FALSE
+  )
+}
 
 
 
