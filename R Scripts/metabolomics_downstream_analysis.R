@@ -528,52 +528,19 @@ dev.off()
 
 
 
-## Results for all the pairwise comparisons and added significance columns for the volcano plot
+# ----- Add significance labels to each pairwise comparison ----- #
+## Loops through every comparison in the res_pairwise_list  
+## and adds Up/Down/Not significant based on the fdr_threshold and logfc threshold 
+## Both thresholds come from user config section
 
-## WT vs WRN
-res_NL_Y <- run_pairwise("NL", "Y", x_norm, meta)
-res_NL_Y$significance <- "Not Significant"
-res_NL_Y$significance[res_NL_Y$padj < 0.05 & res_NL_Y$logFC > 1] <- "Up"
-res_NL_Y$significance[res_NL_Y$padj < 0.05 & res_NL_Y$logFC < -1] <- "Down"
-
-cat("\n=== NL vs Y Summary ===\n")
-cat(" Significant Metabolites:", sum(res_NL_Y$padj < 0.05, na.rm = TRUE), "\n")
-cat("Upregulated in WT:", sum(res_NL_Y$significance == "Up"), "\n")
-cat("Downregulated in WT:", sum(res_NL_Y$significance == "Down"), "\n")
+res_pairwise_list <- lapply(res_pairwise_list, function(res){
+  res$significance <- "Not Significant"
+  res$significance[res$padj < fdr_threshold & res$logFC > logfc_threshold] <- "Up"
+  res$significance[res$padj < fdr_threshold & res$logFC < -logfc_threshold] <- "Down"
+  res
+})
 
 
-## WT vs WRN
-res_WT_WRN <- run_pairwise("WT", "WRN", x_norm, meta)
-res_WT_WRN$significance <- "Not Significant"
-res_WT_WRN$significance[res_WT_WRN$padj < 0.05 & res_WT_WRN$logFC > 1] <- "Up"
-res_WT_WRN$significance[res_WT_WRN$padj < 0.05 & res_WT_WRN$logFC < -1] <- "Down"
-
-cat("\n=== WT vs WRN Summary ===\n")
-cat(" Significant Metabolites:", sum(res_WT_WRN$padj < 0.05, na.rm = TRUE), "\n")
-cat("Upregulated in WT:", sum(res_WT_WRN$significance == "Up"), "\n")
-cat("Downregulated in WT:", sum(res_WT_WRN$significance == "Down"), "\n")
-
-# WT vs shPGC
-res_WT_shPGC <- run_pairwise("WT", "shPGC", x_norm, meta)
-res_WT_shPGC$significance <- "Not Significant"
-res_WT_shPGC$significance[res_WT_shPGC$padj < 0.05 & res_WT_shPGC$logFC > 1] <- "Up"
-res_WT_shPGC$significance[res_WT_shPGC$padj < 0.05 & res_WT_shPGC$logFC < -1] <- "Down"
-
-cat("\n=== WT vs shPGC Summary ===\n")
-cat(" Significant Metabolites:", sum(res_WT_shPGC$padj < 0.05, na.rm = TRUE), "\n")
-cat("Upregulated in WT:", sum(res_WT_shPGC$significance == "Up"), "\n")
-cat("Downregulated in WT:", sum(res_WT_shPGC$significance == "Down"), "\n")
-
-# WRN vs shPGC
-res_WRN_shPGC <- run_pairwise("WRN", "shPGC", x_norm, meta)
-res_WRN_shPGC$significance <- "Not Significant"
-res_WRN_shPGC$significance[res_WRN_shPGC$padj < 0.05 & res_WRN_shPGC$logFC > 1] <- "Up"
-res_WRN_shPGC$significance[res_WRN_shPGC$padj < 0.05 & res_WRN_shPGC$logFC < -1] <- "Down"
-
-cat("\n=== WRN vs shPGC Summary ===\n")
-cat(" Significant Metabolites:", sum(res_WRN_shPGC$padj < 0.05, na.rm = TRUE), "\n")
-cat("Upregulated in WRN:", sum(res_WRN_shPGC$significance == "Up"), "\n")
-cat("Downregulated in WRN:", sum(res_WRN_shPGC$significance == "Down"), "\n")
 
 # Volcano Plot function 
 plot_volcano <- function(res, title, top_n = 35) {
@@ -677,25 +644,23 @@ plot_volcano <- function(res, title, top_n = 35) {
     
 }
 
-## Create pdfs of volcano plots for each comparison
+#----- Generate volcano plots for each pairwise comparison ----- #
+## Loops through res_pairwise_list and creates on volcano plot per comparison
+## File is named automatically based on comparison name
 
-pdf("volcano_plot_NL_VS_Y.pdf", width = 8, height = 6)
-plot_volcano(res_NL_Y, "NL vs Y", top_n = 35)
-dev.off()
+for(comparison_name in names(res_pairwise_list)){
+  ## Get the result dataframe for this comparison
+  res <- res_pairwise_list[[comparison_name]]
+  
+  ## Create a clean filename by replacing spaces with underscores
+  ## Example: "NL vs Y" becomes "NL_vs_Y"
+  filename <- paste0("volcano_plot_", gsub(" ", "_", comparison_name), ".pdf")
+  
+  pdf(filename, width = 8, height = 6)
+  print(plot_volcano(res, comparison_name))
+  dev.off()
+}
 
-
-
-pdf("volcano_plot_WT_VS_WRN.pdf", width = 8, height = 6)
-plot_volcano(res_WT_WRN, "WT vs WRN", top_n = 10)
-dev.off()
-
-pdf("volcano_plot_WT_vs_shPGC.pdf", width = 8, height = 6)
-plot_volcano(res_WT_shPGC, "WT vs shPGC")
-dev.off()
-
-pdf("volcano_plot_WRN_shPGC.pdf", width = 8, height = 6)
-plot_volcano(res_WRN_shPGC, "WRN vs shPGC")
-dev.off()
 
 ##------ Fold change Bar Plots (Pairwise) ----- ##
 ## Reusable function to create FC Bar Plots
@@ -743,62 +708,36 @@ plot_fc_barplot <- function(res_df, comparison_name, n_metabolites = 10){
 }
 
 
-## Now we will remove unusable entries like NAs and also X1...X2...for each comparison
-## This is removing entries, making the data easier to work with
-res_NL_Y_clean <- res_NL_Y %>%
-  filter(!is.na(feature_id)) %>%
-  filter(!grepl("^NA[0-9\\.]", feature_id)) %>%
-  filter(!grepl("^X[0-9]|^X\\.", feature_id)) %>%
-  distinct(feature_id, .keep_all = TRUE) %>%
-  rename(clean_name = feature_id)
+#----- Clean each pairwise result ----- #
+## Remove the NA entries, unnamed features (X1, X2, etc.)
+## and duplicate feature IDs from every comparison
+## Results stored in a new named list called res_pairwise_clean
+res_pairwise_clean <- lapply(res_pairwise_list, function(res){
+  res %>%
+    filter(!is.na(feature_id)) %>%
+    filter(!grepl("^NA[0-9\\.]", feature_id)) %>%
+    filter(!grepl("^X[0-9]^X\\.", feature_id)) %>%
+    distinct(feature_id, .keep_all = TRUE) %>%
+    rename(clean_name = feature_id)
+})
 
+# ----- Generate barplots for each pairwise comparison ----- #
+## Loops through res_pairwise_clean and creates one bar plot per comparison
+## Uses the cleaned results so unnamed/NA metabolites are excluded
+## File name created automatically based on comparison name
 
-
-res_WT_WRN_clean <- res_WT_WRN %>%
-  filter(!is.na(feature_id)) %>%
-  filter(!grepl("^NA", feature_id)) %>%
-  filter(!grepl("^X[0-9]|^X\\.", feature_id)) %>%
-  distinct(feature_id, .keep_all = TRUE) %>%
-  rename(clean_name = feature_id)
-
-res_WT_shPGC_clean <- res_WT_shPGC %>%
-  filter(!is.na(feature_id)) %>%
-  filter(!grepl("^NA", feature_id)) %>%
-  filter(!grepl("^X[0-9]|^X\\.", feature_id)) %>%
-  distinct(feature_id, .keep_all = TRUE) %>%
-  rename(clean_name = feature_id)
-
-res_WRN_shPGC_clean <- res_WRN_shPGC %>%
-  filter(!is.na(feature_id)) %>%
-  filter(!grepl("^NA", feature_id)) %>%
-  filter(!grepl("^X[0-9]|^X\\.", feature_id)) %>%
-  distinct(feature_id, .keep_all = TRUE) %>%
-  rename(clean_name = feature_id)
-
-
-# Create bar plots for each comparisons top ten significant metabolites 
-
-pdf("Log2Fold_Bar_chart_NL_vs_Y.pdf", width = 8, height = 6)
-p1 <- plot_fc_barplot(res_NL_Y_clean, "NL vs Y", n_metabolites = 50)
-p1
-dev.off()
-
-
-pdf("Bar_chart_WT_vs_WRN.pdf", width = 8, height = 6)
-p1 <- plot_fc_barplot(res_WT_WRN_clean, "WT vs WRN", n_metabolites = 10)
-p1
-dev.off()
-
-pdf("Bar_chart_WT_vs_shPGC.pdf", width = 8, height = 6)
-p2 <- plot_fc_barplot(res_WT_shPGC_clean, "WT vs shPGC", n_metabolites = 10)
-p2
-dev.off()
-
-pdf("Bar_chart_WRN_vs_shPGC.pdf", width = 8, height = 6)
-p3 <- plot_fc_barplot(res_WRN_shPGC_clean, "WRN vs shPGC", n_metabolites = 10)
-p3
-dev.off()
-
+for(comparison_name in names(res_pairwise_clean)){
+  ## Get the cleaned result dataframe for this comparison
+  res_clean <- res_pairwise_clean[[comparison_name]]
+  
+  ## Create the filename automatically
+  ## Example: "NL vs Y" becomes "NL_vs_Y.pdf"
+  filename <- paste0("barplot_", gsub(" ", "_", comparison_name), ".pdf")
+  
+  pdf(filename, width = 8, height = 6)
+  print(plot_fc_barplot(res_clean, comparison_name, n_metabolites = 15))
+  dev.off()
+  }
 
 ## Now we will extract the significant metabolites from the cleaned results dataframe for each comparison
 
