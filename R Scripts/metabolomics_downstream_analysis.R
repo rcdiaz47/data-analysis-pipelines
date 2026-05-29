@@ -17,16 +17,16 @@ library(vegan)
 
 # Input file path
 
-input_file <- "C:\\Users\\User\\Desktop\\Data Analysis 2026\\SM_8541713_HILIC_Neg_CD_Results.xlsx"
+input_file <- "SM_8541713_HILIC_Neg_CD_Results.xlsx"
 
 # Number of groups to be tested in experiment
 # 2 = t-test only
 # 3+ = ANOVAA + Tukey + Pairwise analysis
 
-n_groups <- 2
+n_groups <- 3
 
 # Group names must match sample column names
-group_names <- c("NL", "Y")
+group_names <- c("WT", "WRN", "shPGC")
 
 # Output directory for plots and csv files ("./) for current directory
 output_dir <- "./"
@@ -180,7 +180,7 @@ if(n_groups == 2){
       if (length(matched) == 1) matched else NA 
     }),
     
-    stringsasFactors = FALSE
+    stringsAsFactors = FALSE
   )
 }
 
@@ -253,77 +253,165 @@ dev.off()
 
 
 
-# ----- Run statistical test one way anova per metabolite (Are there significant differences between groups?) ----- 
-## Only for more than 2 groups 
+# ----- Statistical Testing ----- #
+
+## ---- Reusable function for pairwise analysis of groups ---- 
+
+run_pairwise <- function(group1, group2, x_mat, meta){
+  samples_keep <- meta$Sample[meta$Group %in% c(group1, group2)]
+  groups_keep <- meta$Group[meta$Group %in% c(group1, group2)]
+  
+  x_sub <- x_mat[,samples_keep]
+  
+  res <- apply(x_sub, 1, function(z){
+    
+    df <- data.frame(
+      value = z,
+      group = groups_keep
+    )
+    
+    df <- df[!is.na(df$value), ]
+    
+    if(length(unique(df$group)) < 2){
+      return(c(logFC = NA, pvalue = NA))
+    }
+    
+    #LogFC (difference in means)
+    m1 <- mean(df$value[df$group == group1], na.rm = TRUE)
+    m2 <- mean(df$value[df$group == group2], na.rm = TRUE)
+    
+    logFC = m1 - m2
+    
+    # t test
+    
+    p <- t.test(value ~ group, data = df)$p.value
+    
+    c(logFC = logFC, pvalue = p)
+    
+    
+  })
+  
+  res <- as.data.frame((t(res)))
+  res$feature_id <- rownames(x_mat)
+  res$padj <- p.adjust(res$pvalue, method = "BH")
+  
+  res
+  
+}
+
+
+
+
+
+# Runs T test for 2 groups or ANOVA + Tukey for 3+ groups
+# group_names and n_groups come from the user config section 
 group <- factor(meta$Group)
 
-anova_res <- apply(x_norm, 1, function(z){
-  
-  df <- data.frame(
-    value = z,
-    group = group
+if(n_groups == 2){
+  ## For 2 groups we skip ANOVA and Tukey entirely
+  ## run_pairwise already runs a t-test internally
+  res_pairwise_list <- list(
+    run_pairwise(group_names[1], group_names[2], x_norm, meta)
   )
   
-  df <- df[!is.na(df$value), ]
+  ## Name the comparison so we can reference it later 
   
-  if(nrow(df) < 3 || length(unique(df$group)) < 2 || sum(!is.na(df$value)) < 3){
-    return(data.frame(pvalue = NA))
-  }
+} else{
+  # ----- One Way Anova Per Metabolite ----- #
+  # apply() runs the function on every row (metabolite) of x_norm 
+  # MARGIN = 1 means rows, 2 would mean columns 
+  anova_res <- apply(x_norm, 1, function(z){
+    ## Build a small dataframe for each metabolite
+    df <- data.frame(
+      value = z,
+      group = group
+    )
+    
+    ## Remove any missing values 
+    df <- df[!is.na(df$value), ]
+    
+    ## Safety check - need at least 3 rows and 2 groups to run ANOVA
+    if(nrow(df) < 3 || length(unique(df$group)) < 2 || sum(!is.na(df$value)) < 3) {
+      return(data.frame(pvalue = NA))
+    }
+    
+    ## Fit the ANOVA model
+    ## aov() is R's built in ANOVA function
+    # value ~ group means "model value as a function of group"
+    fit <- aov(value ~ group, data = df)
+    
+    ## Extract the p value from the ANOVA summary 
+    p <- summary(fit)[[1]][["Pr(>F)"]][[1]]
+    
+    data.frame(pvalue = p)
+    
+    
+  })
   
-  fit <- aov(value ~ group, data = df)
+  ## Combine all the results into one dataframe
+  ## do.call(rbind) stacks all the individual results row by row
+  anova_res <- do.call(rbind, anova_res)
+  anova_res$feature_id <- rownames(x_norm)
+  rownames(anova_res) <- NULL
   
-  p <- summary(fit)[[1]][["Pr(>F)"]][1]
   
-  data.frame(pvalue = p)
-})
-
-anova_res <- do.call(rbind, anova_res)
-anova_res$feature_id <- rownames(x_norm)
-rownames(anova_res) <- NULL
-
-
-
-# ----- FDR correction (Benjamini Hochberg) ----- 
-
-anova_res$padj <- p.adjust(anova_res$pvalue, method = "BH")
-head(anova_res)
-nrow(anova_res)
-
-
-# --- Filter the anova results for significance and also remove NAs for tukey analyis 
-anova_sig_features <- anova_res$feature_id[anova_res$padj < 0.05]
-anova_significant_features_clean <- anova_sig_features[!is.na(anova_sig_features)]
-length(anova_significant_features_clean)
-
-
-
-# ----- Tukey HSD Post Hoc (Where are the significant differences?) ----- 
-tukey_list <- lapply(anova_significant_features_clean, function(fid){
-  z <- x_norm[fid,]
+  # ----- FDR Correction (Benjamini Hochberg) ----- #
+  ## p.adjust corrects for multiple testing
+  ## BH method controls the false discovery rate
+  ## Without this, running thousands of tests inflates the false positive rate 
+  anova_res$padj <- p.adjust(anova_res$pvalue, method = "BH")
   
-  df <- data.frame(
-    value = z,
-    group = group
-  )
-  df <- df[!is.na(df$value), ]
+  ## Filter for significant features only, remove NAs
+  anova_sig_features <- anova_res$feature_id[anova_res$padj < fdr_threshold]
+  anova_significant_features_clean <- anova_sig_features[!is.na(anova_sig_features)]
   
-  fit <- aov(value ~ group, data = df)
+  #----- Tukey HSD Post Hoc ----- #
+  ## ANOVA tells us SOMETHING is different between groups
+  ## Tukey tells us specificanlly WHICH groups differ from each other 
+  tukey_list <- lappy(anova_significant_features_clean, function(fid){
+    z <- x_norm[fid,]
+    
+    df <- data.frame(value = z,
+                     group = group)
+    df <- df[!is.na(df$value), ]
+    
+    fit <- aov(value ~ group, data = df)
+    
+    ## TukeyHSD performs all pairwise comparisons with correction
+    tk <- TukeyHSD(fit)
+    
+    out <- as.data.frame(tk$group)
+    out$comparison <- rownames(out)
+    out$feature_id <- fid
+    rownames(out) <- NULL
+    out
+  })
   
-  tk <- TukeyHSD(fit)
+  tukey_res <- do.call(rbind, tukey_list)
+  tukey_sig <- tukey_res %>% filter(`p adj` < fdr_threshold)
   
-  out <- as.data.frame(tk$group)
-  out$comparison <- rownames(out)
-  out$feature_id <- fid
+  # ----- Generate all the pairwise combinations automatically ----- 
+  ## combn(group_names, 2) generates every possible pair of groups
+  ## For 3 groups WT, WRN, shPGC it produces:
+  ## WT-WRN, WT-shPGC, WRN-shPGC
+  ## Do not need to hardcode each comparison manually
+  ## Simplify = FALSE returns as a list instead of a matrix
   
-  rownames(out) <- NULL
-  out
+  pairs <- combn(group_names, 2, simplify = FALSE)
   
-})
-
-tukey_res <- do.call(rbind, tukey_list)
-tukey_sig <- tukey_res %>% filter(`p adj` < 0.05)
-nrow(tukey_sig)
-head(tukey_sig)
+  ## lapply loops through each pair and runs run_pairwise
+  ## The result is a named list of dataframes, one per comparison 
+  res_pairwise_list <- lapply(pairs, function(pair){
+    run_pairwise(pair[1], pair[2], x_norm, meta)
+  })
+  
+  ## Name each result by its comparison for easy reference later
+  names(res_pairwise_list) <- sapply(pairs, function(pair){
+    paste(pair[1], "vs", pair[2])
+  })
+  
+  
+}
 
 ## ------ Visualizations for ANOVA Results ------ ##
 ## ----------------------------------------------##
@@ -438,49 +526,7 @@ ggplot(plot_data_anova, aes(x = Group, y = abundance, fill = Group)) +
   )
 dev.off()
 
-## ---- Reusable function for pairwise analysis of groups ---- 
 
-run_pairwise <- function(group1, group2, x_mat, meta){
-  samples_keep <- meta$Sample[meta$Group %in% c(group1, group2)]
-  groups_keep <- meta$Group[meta$Group %in% c(group1, group2)]
-  
-  x_sub <- x_mat[,samples_keep]
-  
-  res <- apply(x_sub, 1, function(z){
-    
-    df <- data.frame(
-      value = z,
-      group = groups_keep
-    )
-    
-    df <- df[!is.na(df$value), ]
-    
-    if(length(unique(df$group)) < 2){
-      return(c(logFC = NA, pvalue = NA))
-    }
-    
-    #LogFC (difference in means)
-    m1 <- mean(df$value[df$group == group1], na.rm = TRUE)
-    m2 <- mean(df$value[df$group == group2], na.rm = TRUE)
-    
-    logFC = m1 - m2
-    
-    # t test
-    
-    p <- t.test(value ~ group, data = df)$p.value
-    
-    c(logFC = logFC, pvalue = p)
-    
-    
-  })
-  
-  res <- as.data.frame((t(res)))
-  res$feature_id <- rownames(x_mat)
-  res$padj <- p.adjust(res$pvalue, method = "BH")
-  
-  res
-  
-}
 
 ## Results for all the pairwise comparisons and added significance columns for the volcano plot
 
