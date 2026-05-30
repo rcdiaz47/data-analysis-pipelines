@@ -1,4 +1,4 @@
-# ----- Statistical Analysis ----- 
+# ----- Statistical Analysis ----- #
 library(tidyverse)
 library(readxl)
 library(pheatmap)
@@ -46,7 +46,7 @@ logfc_threshold <- 1
 cd <- read_xlsx(input_file)
 head(cd)
 
-## ------ Clean and shorten the metabolite names for readability ------ 
+# ------ Clean and shorten the metabolite names for readability ------ #
 process_metabolite_names <- function(x, max_length = 40){
   x %>%
     gsub("\\.", " ", .) %>% #Replace dots with spaces
@@ -61,10 +61,10 @@ process_metabolite_names <- function(x, max_length = 40){
 cd$Name <- process_metabolite_names(cd$Name, max_length = 40)
 
 
-# ----- Build the numeric matrix with the columns we want to use for analyzing ----- 
+# ----- Build the numeric matrix with the columns we want to use for analyzing ----- #
 area_cols <- grep("^Group Area:", colnames(cd), value = TRUE)
 
-## Exclude blanks and QCs from the analysis
+# Exclude blanks and QCs from the analysis
 area_cols <- area_cols[!grepl("Blank|blank|BLANK|QC|Qc", area_cols)]
 
 
@@ -73,19 +73,19 @@ x <- cd %>%
 
 rownames(x) <- cd$Name
 
-# ----- Replace missing values with Nas ----- 
+# ----- Replace missing values with Nas ----- #
 sum(is.na(x))
 x[x== ""] <- NA
 
-# ----- Log transform the data with log2 ------ 
+# ----- Log transform the data with log2 ------ #
 x_log <- log2(x)
 
-# ----- Drop metabolites that are missing in too many samples ----- 
+# ----- Drop metabolites that are missing in too many samples ----- #
 keep <- rowMeans(!is.na(x_log)) >= 0.7
 x_filt <- x_log[keep,]
 
 
-# ----- Data normalization using Median Centering ----- 
+# ----- Data normalization using Median Centering ----- #
 column_median <- apply(x_filt,2,median, na.rm = TRUE)
 
 # Subtract each columns median from the value 
@@ -97,7 +97,7 @@ summary(x_norm[,1])
 any(is.na(x_norm))
 nrow(x_norm)
 
-# --- Prepare data for plotting; Box and whisker plots and Density plot --- 
+# --- Prepare data for plotting; Box and whisker plots and Density plot --- #
 
 # Before normalization 
 before_df <- x %>%
@@ -111,7 +111,7 @@ after_df <- x_norm %>%
   tibble::rownames_to_column("metabolite") %>%
   pivot_longer(-metabolite, names_to = "sample", values_to = "values")
 
-# --- Density Plots --- 
+# --- Density Plots --- #
 p1 <- ggplot(before_df, aes(x=value)) + 
   geom_density(fill = "blue", alpha = 0.4) +
   labs(title ="Before Normalization" , x = "Raw Intensity", y = "Density") +
@@ -122,7 +122,7 @@ p2 <- ggplot(after_df, aes(x = values)) +
   labs(title = "After Normalization", x = "Normalized Intensity", y = "Density") +
   theme_minimal()
 
-# --- Boxplots (Subset so they dont look all compressed) ---- 
+# --- Boxplots (Subset so they dont look all compressed) ---- #
 
 before_df <- x[1:50, ] %>%
   as.data.frame() %>%
@@ -149,7 +149,7 @@ p4 <- ggplot(after_df, aes(x = metabolite, y = value)) +
   theme_minimal() + 
   theme(axis.text.y = element_text(size = 6))
 
-## ---- Combine all the plots into one figure ----
+# ---- Combine all the plots into one figure ----#
 data_boxplots <- (p3|p4)
 data_density_plots <- (p1|p2)
 
@@ -162,9 +162,9 @@ plot(data_density_plots)
 dev.off()
 
 
-##------ Exploratory Data Analysis ---------
+##------ Exploratory Data Analysis ---------#
 
-# ----- build metadata  ----- 
+# ----- build metadata  ----- #
 
 if(n_groups == 2){
   meta <- data.frame(
@@ -186,20 +186,20 @@ if(n_groups == 2){
 
 
 
-## ---- PCA plot for all of the metabolites to visualize the group separation ----
+# ---- PCA plot for all of the metabolites to visualize the group separation ----
 
-## Transpose the data because PCA needs the samples as the rows instead of columns 
+# Transpose the data because PCA needs the samples as the rows instead of columns 
 
 x_pca <- t(na.omit(x_norm))
 
-## Run PCA
+# Run PCA
 pca_res <- prcomp(x_pca, scale. = TRUE)
 
-## Extract the PCA scores and add group information to prepare for plotting 
+# Extract the PCA scores and add group information to prepare for plotting 
 pca_scores <- as.data.frame(pca_res$x)
 pca_scores$Group <- meta$Group
 
-## Plot 
+# Plot 
 pdf("pca_plot.pdf", width = 8, height = 6)
 
 ggplot(pca_scores, aes(x = PC1, y=PC2, color = Group)) +
@@ -255,7 +255,7 @@ dev.off()
 
 # ----- Statistical Testing ----- #
 
-## ---- Reusable function for pairwise analysis of groups ---- 
+# ---- Reusable function for pairwise analysis of groups ---- #
 
 run_pairwise <- function(group1, group2, x_mat, meta){
   samples_keep <- meta$Sample[meta$Group %in% c(group1, group2)]
@@ -276,7 +276,7 @@ run_pairwise <- function(group1, group2, x_mat, meta){
       return(c(logFC = NA, pvalue = NA))
     }
     
-    #LogFC (difference in means)
+    # LogFC (difference in means)
     m1 <- mean(df$value[df$group == group1], na.rm = TRUE)
     m2 <- mean(df$value[df$group == group2], na.rm = TRUE)
     
@@ -300,47 +300,44 @@ run_pairwise <- function(group1, group2, x_mat, meta){
 }
 
 
-
-
-
 # Runs T test for 2 groups or ANOVA + Tukey for 3+ groups
 # group_names and n_groups come from the user config section 
 group <- factor(meta$Group)
 
 if(n_groups == 2){
-  ## For 2 groups we skip ANOVA and Tukey entirely
-  ## run_pairwise already runs a t-test internally
+  # For 2 groups we skip ANOVA and Tukey entirely
+  # run_pairwise already runs a t-test internally
   res_pairwise_list <- list(
     run_pairwise(group_names[1], group_names[2], x_norm, meta)
   )
   
-  ## Name the comparison so we can reference it later 
+  # Name the comparison so we can reference it later 
   
 } else{
   # ----- One Way Anova Per Metabolite ----- #
   # apply() runs the function on every row (metabolite) of x_norm 
   # MARGIN = 1 means rows, 2 would mean columns 
   anova_res <- apply(x_norm, 1, function(z){
-    ## Build a small dataframe for each metabolite
+    # Build a small dataframe for each metabolite
     df <- data.frame(
       value = z,
       group = group
     )
     
-    ## Remove any missing values 
+    # Remove any missing values 
     df <- df[!is.na(df$value), ]
     
-    ## Safety check - need at least 3 rows and 2 groups to run ANOVA
+    # Safety check - need at least 3 rows and 2 groups to run ANOVA
     if(nrow(df) < 3 || length(unique(df$group)) < 2 || sum(!is.na(df$value)) < 3) {
       return(data.frame(pvalue = NA))
     }
     
-    ## Fit the ANOVA model
-    ## aov() is R's built in ANOVA function
+    # Fit the ANOVA model
+    # aov() is R's built in ANOVA function
     # value ~ group means "model value as a function of group"
     fit <- aov(value ~ group, data = df)
     
-    ## Extract the p value from the ANOVA summary 
+    # Extract the p value from the ANOVA summary 
     p <- summary(fit)[[1]][["Pr(>F)"]][[1]]
     
     data.frame(pvalue = p)
@@ -348,26 +345,26 @@ if(n_groups == 2){
     
   })
   
-  ## Combine all the results into one dataframe
-  ## do.call(rbind) stacks all the individual results row by row
+  # Combine all the results into one dataframe
+  # do.call(rbind) stacks all the individual results row by row
   anova_res <- do.call(rbind, anova_res)
   anova_res$feature_id <- rownames(x_norm)
   rownames(anova_res) <- NULL
   
   
   # ----- FDR Correction (Benjamini Hochberg) ----- #
-  ## p.adjust corrects for multiple testing
-  ## BH method controls the false discovery rate
-  ## Without this, running thousands of tests inflates the false positive rate 
+  # p.adjust corrects for multiple testing
+  # BH method controls the false discovery rate
+  # Without this, running thousands of tests inflates the false positive rate 
   anova_res$padj <- p.adjust(anova_res$pvalue, method = "BH")
   
-  ## Filter for significant features only, remove NAs
+  # Filter for significant features only, remove NAs
   anova_sig_features <- anova_res$feature_id[anova_res$padj < fdr_threshold]
   anova_significant_features_clean <- anova_sig_features[!is.na(anova_sig_features)]
   
   #----- Tukey HSD Post Hoc ----- #
-  ## ANOVA tells us SOMETHING is different between groups
-  ## Tukey tells us specificanlly WHICH groups differ from each other 
+  # ANOVA tells us SOMETHING is different between groups
+  # Tukey tells us specificanlly WHICH groups differ from each other 
   tukey_list <- lappy(anova_significant_features_clean, function(fid){
     z <- x_norm[fid,]
     
@@ -377,7 +374,7 @@ if(n_groups == 2){
     
     fit <- aov(value ~ group, data = df)
     
-    ## TukeyHSD performs all pairwise comparisons with correction
+    # TukeyHSD performs all pairwise comparisons with correction
     tk <- TukeyHSD(fit)
     
     out <- as.data.frame(tk$group)
@@ -391,21 +388,21 @@ if(n_groups == 2){
   tukey_sig <- tukey_res %>% filter(`p adj` < fdr_threshold)
   
   # ----- Generate all the pairwise combinations automatically ----- 
-  ## combn(group_names, 2) generates every possible pair of groups
-  ## For 3 groups WT, WRN, shPGC it produces:
-  ## WT-WRN, WT-shPGC, WRN-shPGC
-  ## Do not need to hardcode each comparison manually
-  ## Simplify = FALSE returns as a list instead of a matrix
+  # combn(group_names, 2) generates every possible pair of groups
+  # For 3 groups WT, WRN, shPGC it produces:
+  # WT-WRN, WT-shPGC, WRN-shPGC
+  # Do not need to hardcode each comparison manually
+  # Simplify = FALSE returns as a list instead of a matrix
   
   pairs <- combn(group_names, 2, simplify = FALSE)
   
-  ## lapply loops through each pair and runs run_pairwise
-  ## The result is a named list of dataframes, one per comparison 
+  # lapply loops through each pair and runs run_pairwise
+  # The result is a named list of dataframes, one per comparison 
   res_pairwise_list <- lapply(pairs, function(pair){
     run_pairwise(pair[1], pair[2], x_norm, meta)
   })
   
-  ## Name each result by its comparison for easy reference later
+  # Name each result by its comparison for easy reference later
   names(res_pairwise_list) <- sapply(pairs, function(pair){
     paste(pair[1], "vs", pair[2])
   })
@@ -413,8 +410,8 @@ if(n_groups == 2){
   
 }
 
-## ------ Visualizations for ANOVA Results ------ ##
-## ----------------------------------------------##
+# ------ Visualizations for ANOVA Results ------ #
+
 cat("\n === Anova Summary === \n")
 cat("Total significant metabolites tested: ", nrow(anova_res), "\n")
 cat("Significant Metabolites (FDR < 0.05): ", length(anova_significant_features_clean), "\n")
@@ -429,11 +426,11 @@ top_anova_metabolites <-  anova_res %>%
   pull(feature_id)
   
 
-#Annotation 
+# Annotation 
 annotation_col <- meta %>% column_to_rownames("Sample") %>%
   select(Group)
 
-## ----- Heatmap: Anova Significant metabolites (All 3 Groups) ----- 
+# ----- Heatmap: Anova Significant metabolites (All 3 Groups) -----# 
 
 pdf("heatmap_anova_top30.pdf", width = 14, height =10)
 
@@ -454,8 +451,8 @@ pheatmap(
 
 dev.off()
 
-### ----- PCA: ANOVA Significant Metabolites only ----- 
-## Probably a little redundant
+# ----- PCA: ANOVA Significant Metabolites only ----- #
+# Probably a little redundant
 # Use only ANOVA significant metabolites for PCA
 x_pca_anova <- t(na.omit(x_norm[anova_significant_features_clean,]))
 
@@ -493,7 +490,7 @@ ggplot(pca_anova_scores, aes(x =PC1, y = PC2, color = Group)) +
 
 dev.off()
 
-## ------ Box plots: Top 6 Anova Metabolites ----- 
+# ------ Box plots: Top 6 Anova Metabolites ----- 
 top6_anova <- anova_res %>%
   filter(!is.na(feature_id) & padj < 0.05) %>%
   arrange(padj) %>%
@@ -529,9 +526,9 @@ dev.off()
 
 
 # ----- Add significance labels to each pairwise comparison ----- #
-## Loops through every comparison in the res_pairwise_list  
-## and adds Up/Down/Not significant based on the fdr_threshold and logfc threshold 
-## Both thresholds come from user config section
+# Loops through every comparison in the res_pairwise_list  
+# and adds Up/Down/Not significant based on the fdr_threshold and logfc threshold 
+# Both thresholds come from user config section
 
 res_pairwise_list <- lapply(res_pairwise_list, function(res){
   res$significance <- "Not Significant"
@@ -627,17 +624,17 @@ plot_volcano <- function(res, title, top_n = 35) {
       axis.text = element_text(size = 11, color = "black"),
       axis.line = element_line(color = "black", linewidth = 0.5),
       
-      #Legend styling
+      # Legend styling
       legend.position = "bottom",
       legend.text = element_text(size = 11),
       legend.title = element_blank(),
       
-      #Grid and panel
+      # Grid and panel
       panel.grid.minor = element_blank(),
       panel.grid.major = element_line(color="grey90", linewidth = 0.3),
       panel.border = element_rect(color = "black", fill = NA, linewidth = 0.7),
       
-      #Background
+      # Background
       plot.background = element_rect(fill = "white", color = NA),
       panel.background = element_rect(fill="white", color = NA)
     )
@@ -645,15 +642,15 @@ plot_volcano <- function(res, title, top_n = 35) {
 }
 
 #----- Generate volcano plots for each pairwise comparison ----- #
-## Loops through res_pairwise_list and creates on volcano plot per comparison
-## File is named automatically based on comparison name
+# Loops through res_pairwise_list and creates on volcano plot per comparison
+# File is named automatically based on comparison name
 
 for(comparison_name in names(res_pairwise_list)){
-  ## Get the result dataframe for this comparison
+  # Get the result dataframe for this comparison
   res <- res_pairwise_list[[comparison_name]]
   
-  ## Create a clean filename by replacing spaces with underscores
-  ## Example: "NL vs Y" becomes "NL_vs_Y"
+  # Create a clean filename by replacing spaces with underscores
+  # Example: "NL vs Y" becomes "NL_vs_Y"
   filename <- paste0("volcano_plot_", gsub(" ", "_", comparison_name), ".pdf")
   
   pdf(filename, width = 8, height = 6)
@@ -662,8 +659,8 @@ for(comparison_name in names(res_pairwise_list)){
 }
 
 
-##------ Fold change Bar Plots (Pairwise) ----- ##
-## Reusable function to create FC Bar Plots
+#------ Fold change Bar Plots (Pairwise) ----- #
+# Reusable function to create FC Bar Plots
 plot_fc_barplot <- function(res_df, comparison_name, n_metabolites = 10){
   
   # Get the top metabolites by absolute fold change 
@@ -709,9 +706,9 @@ plot_fc_barplot <- function(res_df, comparison_name, n_metabolites = 10){
 
 
 #----- Clean each pairwise result ----- #
-## Remove the NA entries, unnamed features (X1, X2, etc.)
-## and duplicate feature IDs from every comparison
-## Results stored in a new named list called res_pairwise_clean
+# Remove the NA entries, unnamed features (X1, X2, etc.)
+# and duplicate feature IDs from every comparison
+# Results stored in a new named list called res_pairwise_clean
 res_pairwise_clean <- lapply(res_pairwise_list, function(res){
   res %>%
     filter(!is.na(feature_id)) %>%
@@ -722,16 +719,16 @@ res_pairwise_clean <- lapply(res_pairwise_list, function(res){
 })
 
 # ----- Generate barplots for each pairwise comparison ----- #
-## Loops through res_pairwise_clean and creates one bar plot per comparison
-## Uses the cleaned results so unnamed/NA metabolites are excluded
-## File name created automatically based on comparison name
+# Loops through res_pairwise_clean and creates one bar plot per comparison
+# Uses the cleaned results so unnamed/NA metabolites are excluded
+# File name created automatically based on comparison name
 
 for(comparison_name in names(res_pairwise_clean)){
-  ## Get the cleaned result dataframe for this comparison
+  # Get the cleaned result dataframe for this comparison
   res_clean <- res_pairwise_clean[[comparison_name]]
   
-  ## Create the filename automatically
-  ## Example: "NL vs Y" becomes "NL_vs_Y.pdf"
+  # Create the filename automatically
+  # Example: "NL vs Y" becomes "NL_vs_Y.pdf"
   filename <- paste0("barplot_", gsub(" ", "_", comparison_name), ".pdf")
   
   pdf(filename, width = 8, height = 6)
@@ -739,236 +736,154 @@ for(comparison_name in names(res_pairwise_clean)){
   dev.off()
   }
 
-## Now we will extract the significant metabolites from the cleaned results dataframe for each comparison
 
-sig_metab_NL_Y <- res_NL_Y_clean %>%
-  filter(padj < 0.05) %>%
-  pull(clean_name)
-
-
-sig_metab_WT_WRN <- res_WT_WRN_clean %>%
-  filter(padj < 0.05) %>%
-  pull(clean_name)
-
-sig_metab_WT_shPGC <- res_WT_shPGC_clean %>%
-  filter(padj < 0.05) %>%
-  pull(clean_name)
-
-sig_metab_WRN_shPGC <- res_WRN_shPGC_clean %>%
-  filter(padj < 0.05) %>%
-  pull(clean_name)
-
-
-## prepare the input for pathway analysis for each comparison
-## we need one column in plain text 
-
-NL_Y_sig_df <- data.frame(metabolite = sig_metab_NL_Y)
-
-
-Wt_wrn_sig_df <- data.frame(metabolite = sig_metab_WT_WRN)
-Wt_shPGC_sig_df <- data.frame(metabolite = sig_metab_WT_shPGC)
-Wrn_shPGC_sig_df <- data.frame(metabolite = sig_metab_WRN_shPGC)
-
-
-## Export for metaboanlyst evaluation for pathway analysis
-write.csv(NL_Y_sig_df, "NL_vs_y_sig_metabolites_pathway_enrichment.csv", row.names = FALSE)
-
-write.csv(Wt_wrn_sig_df, "wt_vs_wrn_sig_metabolites.csv", row.names = FALSE)
-write.csv(Wt_shPGC_sig_df, "wt_vs_shPGC_sig_metabolites.csv", row.names = FALSE)
-write.csv(Wrn_shPGC_sig_df, "wrn_vs_shPGC_sig_metabolites.csv", row.names = FALSE)
-
-
-## Create an abundance heatmap using our normalized matrix and each comparison 
-## Top 20 metabolites per comparison 
-
-top_metabs_heatmap_NLvsY<- res_NL_Y_clean %>%
-  filter(padj < 0.05) %>%
-  arrange(padj) %>%
-  slice_head(n=50) %>%
-  pull(clean_name)
-
-
-
-## WT vs WRN
-
-top_metabs_heatmap_WTvsWRN<- res_WT_WRN_clean %>%
-  filter(padj < 0.05) %>%
-  arrange(padj) %>%
-  slice_head(n=20) %>%
-  pull(clean_name)
-
-top_metabs_heatmap_WTvsshPGC<- res_WT_shPGC_clean %>%
-  filter(padj < 0.05) %>%
-  arrange(padj) %>%
-  slice_head(n=20) %>%
-  pull(clean_name)
-
-top_metabs_heatmap_WRNvsshPGC<- res_WRN_shPGC_clean %>%
-  filter(padj < 0.05) %>%
-  arrange(padj) %>%
-  slice_head(n=20) %>%
-  pull(clean_name)
+# ----- Generate heat maps for each pairwise comparison ----- #
+# Loops through res_pairwise_clean and creates one heatmap per comparison
+# Top 50 significant metabolites per comparison
+# File name automatically created based on comparison name 
+ 
+for(comparison_name in names(res_pairwise_clean)){
+  
+  # Get cleaned results for this comparison
+  res_clean <- res_pairwise_clean[[comparison_name]]
+  
+  # Get top 50 significant metabolites by adjusted p-value
+  top_metabs <- res_clean %>%
+    filter(padj < fdr_threshold) %>%
+    arrange(padj) %>%
+    slice_head(n = 50) %>%
+    pull(clean_name)
+  
+  # Skip this comparison if there are no significant metabolites found
+  if(length(top_metabs) == 0){
+    cat("No significant metabolites for", comparison_name, "-skipping heatmpa\n")
+    next
+  }
+  
+  # Extract the normalized data for the metabolites
+  heat_data <- x_norm[top_metabs, ]
+  
+  # Create the file name automatically
+  filename <- paste0("heatmap_", gsub(" ", "_", comparison_name), ".pdf")
+  
+  pdf(filename, width = 12, height = 12)
+  pheatmap(
+    heat_data,
+    scale = "row",
+    annotation_col = annotation_col,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    clustering_distance_rows = "correlation",
+    clustering_distance_cols = "correlation",
+    clustering_method = "average",
+    fontsize_row = 7,
+    fontsize_col = 7,
+    treeheight_row = 120,
+    treeheight_col = 120,
+    main = paste("Top", nrow(heat_data), "Significant Metabolites (", comparison_name, ")")
+  )
+  
+  dev.off()
+  
+}
 
 
-# Create the heatmap data for each of the 3 comparisons 
-NL_vs_Y_heatData <- x_norm[top_metabs_heatmap_NLvsY,]
+#----- Export pairwise results to CSV ----- #
+# Loops through both lists and exports full and cleaned results
+# Files named automatically based on comparison name 
 
+for(comparison_name in names(res_pairwise_list)){
+  # Create clean filename
+  clean_comparison <- gsub(" ", "_", comparison_name)
+  
+  # Export full results
+  write.csv(
+    res_pairwise_list[[comparison_name]],
+    paste0("pairwise_", clean_comparison, "_full.csv"),
+    row.names = FALSE
+  )
+  
+  # Export cleaned results
+  write.csv(
+    res_pairwise_clean[[comparison_name]],
+    paste0("pairwise_", clean_comparison, "_clean.csv"),
+    row.names = FALSE
+  )
+  
+  # Export significant metabolites for Metaboanalyst Pathway Analysis
+  sig_metabs <- res_pairwise_clean[[comparison_name]] %>%
+    filter(padj < fdr_threshold) %>%
+    pull(clean_name)
+  
+  write.csv(
+    data_frame(metabolite = sig_metabs),
+    paste0("pathway_input_", clean_comparison, ".csv"),
+    row.names = FALSE
+  )
+  
+}
 
-WT_vs_WRN_heatData <- x_norm[top_metabs_heatmap_WTvsWRN,]
-WT_vs_shPGC_heatData <- x_norm[top_metabs_heatmap_WTvsshPGC, ]
-WRN_vs_shPGC_heatData <- x_norm[top_metabs_heatmap_WRNvsshPGC, ]
+# Export ANOVA and Tukey Results only if 3+ groups
+if(n_group > 2){
+  write.csv(anova_res, "anova_all_results.csv", row.names = FALSE)
+  write.csv(anova_res %>% filter(padj < fdr_threshold), "anova_significant_results.csv", row.names = FALSE)
+  write.csv(tukey_res, "tukey_all_results.csv", row.names = FALSE)
+  write.csv(tukey_sig, "tukey_significant_results.csv", row.names = FALSE)
+}
 
-
-#Annotation 
-annotation_col <- meta %>% column_to_rownames("Sample") %>%
-  select(Group)
-
-
-# Abdundance Heatmap for each of the three comparisons
-# Include Dendrograms for hierarchal clustering of samples and metabolites 
-
-##PHeatmap is using "euclidean" distance metric with "complete" linkage method by default
-## We will switch our method to "correlation" distance so we can see how metabolites co vary (go up or down together)
-## We will also siwtch to "average" linkage 
-## scaling is z score normalization by row (feature)
-
-pdf("heatmap_NL_vs_Y_pairwise.pdf", width = 14, height = 10)
-
-pheatmap(
-  NL_vs_Y_heatData,
-  scale = "row",
-  annotation_col = annotation_col,
-  cluster_rows = TRUE, 
-  cluster_cols = TRUE,
-  clustering_distance_rows = "correlation",
-  clustering_distance_cols = "correlation",
-  clustering_method = "average",
-  fontsize_row = 7,
-  fontsize_col = 7,
-  treeheight_row = 100,
-  treeheight_col = 100,
-  main = paste("Top", nrow(NL_vs_Y_heatData), "Significant Metabolites (NL vs Y)")
-)
-dev.off()
-
-pdf("heatmap_Wt_vs_shPGC_pairwise.pdf", width = 12, height = 12)
-pheatmap(
-  WT_vs_shPGC_heatData,
-  scale = "row",
-  annotation_col = annotation_col,
-  cluster_rows = TRUE, 
-  cluster_cols = TRUE,
-  clustering_distance_rows = "correlation",
-  clustering_distance_cols = "correlation",
-  clustering_method = "average",
-  fontsize_row = 7,
-  fontsize_col = 7,
-  treeheight_row = 120,
-  treeheight_col = 120,
-  main = paste("Top", nrow(WT_vs_shPGC_heatData) , "Significant Metabolites (WT vs shPGC)")
-)
-dev.off()
-
-pdf("heatmap_Wrn_vs_shPGC_pairwise.pdf", width = 12, height = 12)
-pheatmap(
-  WRN_vs_shPGC_heatData,
-  scale = "row",
-  annotation_col = annotation_col,
-  cluster_rows = TRUE, 
-  cluster_cols = TRUE,
-  clustering_distance_rows = "correlation",
-  clustering_distance_cols = "correlation",
-  clustering_method = "average",
-  fontsize_row = 7,
-  fontsize_col = 7,
-  treeheight_row = 120,
-  treeheight_col = 120,
-  main = paste("Top", nrow(WRN_vs_shPGC_heatData) ,"Significant Metabolites (WRN vs shPGC)")
-)
-dev.off()
-
-## =====================================
-## Export Results to CSV files 
-## ====================================
-
-## Anova all and significant results
-
-write.csv(anova_res, "anova_all_results.csv", row.names = FALSE)
-write.csv(anova_res %>% filter(padj < 0.05), "anova_significant_results.csv", row.names = FALSE)
-
-## Tukey all and significant results
-write.csv(tukey_res, "tukey_all_results.csv", row.names = FALSE)
-write.csv(tukey_sig, "tukey_significant_results.csv", row.names = FALSE)
-
-## Pairwise T test Results full and cleaned
-write.csv(res_NL_Y, "pairwise_NL_vs_Y_full.csv", row.names = FALSE)
-write.csv(res_NL_Y_clean, "pairwise_NL_vs_Y_cleaned.csv", row.names = FALSE)
-
-
-write.csv(res_WT_WRN_clean, "pairwise_WT_vs_WRN.csv", row.names = FALSE)
-write.csv(res_WT_shPGC_clean, "pairwise_WT_vs_shPGC.csv", row.names = FALSE)
-write.csv(res_WRN_shPGC_clean, "pairwise_WRN_vs_shPGC.csv", row.names = FALSE)
-
-
-## Normalized Data Matrix
+# Export normalized data matrix and metadata
 x_norm_export <- x_norm %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Metabolite")
 write.csv(x_norm_export, "normalized_data_matrix.csv", row.names = FALSE)
-
-## Metadata
 write.csv(meta, "sample_metadata.csv", row.names = FALSE)
 
-## Summary Statistics for ANOVA
 
-#summary_stats <- data.frame(
-  #Analysis = c(#"Total ANOVA Metabolites Tested",
-               #"ANOVA Significant (FDR < 0.05)",
-               #"Tukey Significant comparisons",
-               "NL vs Y significant"
-               #"WT vs shPGC significant",
-               #"WRN vs shPGC significant"
-              # ),
-  #Count = c(
-    #nrow(anova_res),
-    #sum(anova_res$padj < 0.05, na.rm = TRUE),
-    #nrow(tukey_sig),
-    #sum(res_NL_Y_clean$padj < 0.05, na.rm = TRUE)
-    #sum(res_WT_shPGC_clean$padj < 0.05, na.rm = TRUE),
-    #sum(res_WRN_shPGC_clean$padj < 0.05, na.rm = TRUE)
-  #)
-#)
+#----- Dynamic summary statistics ----- #
+# Builds a summary for every pairwise comparison automatically
+# Also includes ANOVA summary if n_groups > 2
 
-
-## Summary statistics for Pairwise analysis
-summary_stats <- data.frame(
-  Analysis = c("Total Metabolites Tested",
-               "Metabolites after filtering (>70% present)",
-               "Signficant Metabolites (FDR < 0.05)",
-               " -Upregulated in NL",
-               " -Downregulated in NL",
-               "Metabolites with |LogFC| > 1 And FDR < 0.05",
-               " -High FC Upregulated (LogFC > 1)",
-               " -High FC Downregulated (LogFC < -1)",
-               "Metabolites with |LogFC| > 2",
-               "Identifiable metabolites (after cleaning)"
-               ),
-  Count = c(
-    nrow(x), # Total before filtering
-    nrow(x_norm), # After filtering missing data
-    sum(res_NL_Y$padj < 0.05, na.rm = TRUE), # All significant
-    sum(res_NL_Y$padj < 0.05 & res_NL_Y$logFC > 0, na.rm = TRUE), #Up
-    sum(res_NL_Y$padj < 0.05 & res_NL_Y$logFC < 0, na.rm = TRUE), #Down
-    sum(res_NL_Y$significance != "Not Significant"), #High FC + significant
-    sum(res_NL_Y$significance == "Up"), # High FC up
-    sum(res_NL_Y$significance == "Down"), # High FC Down
-    sum(res_NL_Y$padj < 0.05 & abs(res_NL_Y$logFC > 2), na.rm = TRUE), #Very high FC
-    nrow(res_NL_Y_clean)
+# Pairwise summary for every comparison
+pairwise_summary <- do.call(rbind, lapply(names(res_pairwise_list), function(comparison_name){
+  res <- res_pairwise_list[[comparison_name]]
+  res_clean <- res_pairwise_clean[[comparison_name]]
+  
+  data.frame(
+    Comparison = comparison_name,
+    Total_Tested = nrow(res),
+    Significant_FDR = sum(res$padj < fdr_threshold, na.rm = TRUE),
+    Upregulated = sum(res$significance == "Up", na.rm = TRUE),
+    Downregulated = sum(res$significance == "Down", na.rm = TRUE),
+    High_FC_Significant = sum(res$significance != "Not Significant", na.rm = TRUE),
+    Identifiable_Metabolites = nrow(res_clean)
   )
-)
+  
+}))
 
-write.csv(summary_stats, "summary_statistics.csv", row.names = FALSE)
+write.csv(pairwise_summary, "summary_statistics_pairwise.csv", row.names = FALSE)
 
+# ANOVA summary only for 3+ groups 
+if(n_groups > 2){
+  
+  anova_summary <- data.frame(
+    Analysis = c(
+      "Total Metabolites Tested",
+      "Metabolites after filtering (>70% present)",
+      "ANOVA Significant (FDR < 0.05)",
+      "Tukey Significant Comparisons"
+    ),
+    
+    Count = c(
+      nrow(x),
+      nrow(x_norm),
+      sum(anova_res$pad < fdr_threshold, na.rm = TRUE),
+      nrow(tukey_sig)
+    )
+  )
+  
+  write.csv(anova_summary, "summary_statistics_anova.csv", row.names = FALSE)
+  
+}
 
 
 
