@@ -164,7 +164,7 @@ dev.off()
 
 ##------ Exploratory Data Analysis ---------#
 
-# ----- build metadata  ----- #
+# ----- Build metadata  ----- #
 
 if(n_groups == 2){
   meta <- data.frame(
@@ -365,7 +365,7 @@ if(n_groups == 2){
   #----- Tukey HSD Post Hoc ----- #
   # ANOVA tells us SOMETHING is different between groups
   # Tukey tells us specificanlly WHICH groups differ from each other 
-  tukey_list <- lappy(anova_significant_features_clean, function(fid){
+  tukey_list <- lapply(anova_significant_features_clean, function(fid){
     z <- x_norm[fid,]
     
     df <- data.frame(value = z,
@@ -410,7 +410,68 @@ if(n_groups == 2){
   
 }
 
+# ----- Print summary of statistical testing completed ----- #
+cat("\n======================================\n")
+cat("Statitsical Testing Complete\n")
+cat("========================================\n")
+cat("Groups tested:", paste(group_names, collapse = ", "), "\n")
+cat("Number of groups:", n_groups, "\n")
+cat("Statistical test used:", ifelse(n_groups == 2,"t-test (pairwise)", "ANOVA + Tukey + Pairwise t tests"), "\n")
+
+
+if(n_groups > 2){
+  cat("\nANOVA Results:\n")
+  cat(" Total metabolites tested:", nrow(anova_res), "\n")
+  cat(" Significant (FDR <", fdr_threshold, "):", length(anova_significant_features_clean), "\n")
+  cat(" Tukey Significant comparisons:", nrow(tukey_sig), "\n")
+}
+
+cat("\nPairwise Comparisons Run:\n")
+for(comparison_name in names(res_pairwise_list)){
+  res <- res_pairwise_list[[comparison_name]]
+  cat(" -", comparison_name, ":", sum(res$padj < fdr_threshold, na.rm = TRUE), "significant metabolites\n")
+}
+cat("========================================\n")
+
+
+
+cat("=========================================\n")
+cat("Output Datasets Created\n")
+cat("=========================================\n")
+
+if(n_groups >2){
+  cat("\nANOVA & Tuket Datasets:\n")
+  cat(" - anova_res:", nrow(anova_res), "metabolites\n")
+  cat(" - anova_significant_features_clean:", length(anova_significant_features_clean), "metabolites\n")
+  cat(" - tukey_res:", nrow(tukey_res), "rows\n")
+  cat(" -tukey_sig:", nrow(tukey_sig), "significant comparisons\n")
+  
+} else{
+  cat("\nT-test Dataset:\n")
+  cat(" - res_pairwise_list", nrow(res_pairwise_list[[1]]), "metabolites tested\n")
+  cat(" -Significant (FDR <", fdr_threshold, "):", sum(res_pairwise_list[[1]]$padj < fdr_threshold, na.rm = TRUE), "\n")
+  
+}
+
+cat("\nPairwise Datasets:\n")
+for(comparison_name in names(res_pairwise_list)){
+  res <- res_pairwise_list[[comparison_name]]
+  cat(" - res_pairwise_list[['", comparison_name, "']]: ", nrow(res), " metabolites\n", sep="")
+}
+
+cat("\nCore Datasets\n")
+cat(" - x_norm:", nrow(x_norm), "metabolites x", ncol(x_norm), "samples\n")
+cat(" - meta:", nrow(meta), "samples\n")
+cat("====================================\n")
+
 # ------ Visualizations for ANOVA Results ------ #
+
+
+# Annotation 
+annotation_col <- meta %>%
+  select(Group)
+
+if(n_groups >2){
 
 cat("\n === Anova Summary === \n")
 cat("Total significant metabolites tested: ", nrow(anova_res), "\n")
@@ -418,23 +479,16 @@ cat("Significant Metabolites (FDR < 0.05): ", length(anova_significant_features_
 cat("Percentage Significant: ", 
     round(length(anova_significant_features_clean)/ nrow(anova_res) * 100, 1), "%\n")
 
-# Get the top 30 metabolites by ANOVA for plotting 
+# Heatmap
 top_anova_metabolites <-  anova_res %>%
   filter(!is.na(feature_id) & padj < 0.05) %>%
   arrange(padj) %>%
   slice_head(n = 30) %>% # Top 30 for heatmap 
   pull(feature_id)
   
-
-# Annotation 
-annotation_col <- meta %>% column_to_rownames("Sample") %>%
-  select(Group)
-
-# ----- Heatmap: Anova Significant metabolites (All 3 Groups) -----# 
-
 pdf("heatmap_anova_top30.pdf", width = 14, height =10)
 
-pheatmap(
+print(pheatmap(
   x_norm[top_anova_metabolites,],
   scale = "row",
   annotation_col = annotation_col,
@@ -447,50 +501,12 @@ pheatmap(
   
   main = "Top 30 Anova Significant metabolites"
 
-  )
+  ))
 
 dev.off()
 
-# ----- PCA: ANOVA Significant Metabolites only ----- #
-# Probably a little redundant
-# Use only ANOVA significant metabolites for PCA
-x_pca_anova <- t(na.omit(x_norm[anova_significant_features_clean,]))
 
-# Run PCA 
-pca_anova <- prcomp(x_pca_anova, scale. = TRUE)
-
-
-# Extract the scores
-pca_anova_scores <- as.data.frame(pca_anova$x)
-pca_anova_scores$Group <- meta$Group
-
-# Plot
-
-pdf("pca_anova_significant.pdf", width = 8, height = 6)
-
-ggplot(pca_anova_scores, aes(x =PC1, y = PC2, color = Group)) +
-  geom_point(size = 3) +
-  stat_ellipse(
-    aes(fill = Group),
-    geom = "polygon",
-    alpha = 0.2,
-    level = 0.95,
-    color = NA
-  ) +
-  labs(
-    title = " PCA: ANOVA- Significant Metabolites Only",
-    subtitle = paste0(length(anova_significant_features_clean), " metabolites"),
-    x = paste0("PC1 (", round(summary(pca_anova)$importance[2,1] * 100,1), "%)"),
-    y = paste0("PC2 (", round(summary(pca_anova)$importance[2,2] * 100,1), "%)")
-  ) + theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    plot.subtitle = element_text(hjust = 0.5)
-  )
-
-dev.off()
-
-# ------ Box plots: Top 6 Anova Metabolites ----- 
+# Boxplots
 top6_anova <- anova_res %>%
   filter(!is.na(feature_id) & padj < 0.05) %>%
   arrange(padj) %>%
@@ -507,7 +523,7 @@ plot_data_anova <- x_norm[top6_anova, ] %>%
 # Create boxplots
 pdf("anova_boxplots_top6.pdf", width = 8, height = 6)
 
-ggplot(plot_data_anova, aes(x = Group, y = abundance, fill = Group)) +
+print(ggplot(plot_data_anova, aes(x = Group, y = abundance, fill = Group)) +
   geom_boxplot(outlier.shape = NA) +
   geom_point(position = position_jitter(width = 0.2), alpha = 0.5, size = 2) +
   facet_wrap(~ metabolite, scales = "free_y", ncol = 3)+ 
@@ -520,10 +536,10 @@ ggplot(plot_data_anova, aes(x = Group, y = abundance, fill = Group)) +
     legend.position = "none",
     strip.text = element_text(size = 10, face = "bold"),
     plot.title = element_text(hjust = 0.5)
-  )
+  ))
 dev.off()
 
-
+}
 
 # ----- Add significance labels to each pairwise comparison ----- #
 # Loops through every comparison in the res_pairwise_list  
@@ -767,7 +783,8 @@ for(comparison_name in names(res_pairwise_clean)){
   filename <- paste0("heatmap_", gsub(" ", "_", comparison_name), ".pdf")
   
   pdf(filename, width = 12, height = 12)
-  pheatmap(
+  
+  print(pheatmap(
     heat_data,
     scale = "row",
     annotation_col = annotation_col,
@@ -781,7 +798,7 @@ for(comparison_name in names(res_pairwise_clean)){
     treeheight_row = 120,
     treeheight_col = 120,
     main = paste("Top", nrow(heat_data), "Significant Metabolites (", comparison_name, ")")
-  )
+  ))
   
   dev.off()
   
@@ -816,7 +833,7 @@ for(comparison_name in names(res_pairwise_list)){
     pull(clean_name)
   
   write.csv(
-    data_frame(metabolite = sig_metabs),
+    data.frame(metabolite = sig_metabs),
     paste0("pathway_input_", clean_comparison, ".csv"),
     row.names = FALSE
   )
@@ -824,7 +841,7 @@ for(comparison_name in names(res_pairwise_list)){
 }
 
 # Export ANOVA and Tukey Results only if 3+ groups
-if(n_group > 2){
+if(n_groups > 2){
   write.csv(anova_res, "anova_all_results.csv", row.names = FALSE)
   write.csv(anova_res %>% filter(padj < fdr_threshold), "anova_significant_results.csv", row.names = FALSE)
   write.csv(tukey_res, "tukey_all_results.csv", row.names = FALSE)
@@ -876,7 +893,7 @@ if(n_groups > 2){
     Count = c(
       nrow(x),
       nrow(x_norm),
-      sum(anova_res$pad < fdr_threshold, na.rm = TRUE),
+      sum(anova_res$padj < fdr_threshold, na.rm = TRUE),
       nrow(tukey_sig)
     )
   )
