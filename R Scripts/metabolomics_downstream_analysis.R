@@ -17,16 +17,16 @@ library(vegan)
 
 # Input file path
 
-input_file <- "SM_8541713_HILIC_Neg_CD_Results.xlsx"
+input_file <- "2Group_test_metabolomics.xlsx"
 
 # Number of groups to be tested in experiment
 # 2 = t-test only
 # 3+ = ANOVAA + Tukey + Pairwise analysis
 
-n_groups <- 3
+n_groups <- 2
 
 # Group names must match sample column names
-group_names <- c("WT", "WRN", "shPGC")
+group_names <- c("WT", "WRN")
 
 # Output directory for plots and csv files ("./) for current directory
 output_dir <- "./"
@@ -312,7 +312,7 @@ if(n_groups == 2){
   )
   
   # Name the comparison so we can reference it later 
-  
+  names(res_pairwise_list) <- paste(group_names[1], "vs", group_names[2])
 } else{
   # ----- One Way Anova Per Metabolite ----- #
   # apply() runs the function on every row (metabolite) of x_norm 
@@ -416,7 +416,7 @@ cat("Statitsical Testing Complete\n")
 cat("========================================\n")
 cat("Groups tested:", paste(group_names, collapse = ", "), "\n")
 cat("Number of groups:", n_groups, "\n")
-cat("Statistical test used:", ifelse(n_groups == 2,"t-test (pairwise)", "ANOVA + Tukey + Pairwise t tests"), "\n")
+cat("Statistical test used:", ifelse(n_groups == 2,"T-test (pairwise)", "ANOVA + Tukey + Pairwise t tests"), "\n")
 
 
 if(n_groups > 2){
@@ -468,8 +468,8 @@ cat("====================================\n")
 
 
 # Annotation 
-annotation_col <- meta %>%
-  select(Group)
+annotation_col <- meta %>% select(Group)
+rownames(annotation_col) <- meta$Sample
 
 if(n_groups >2){
 
