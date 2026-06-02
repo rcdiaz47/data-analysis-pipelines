@@ -1,59 +1,113 @@
 library(dplyr)
-# Visualize Ms.Ms identified and peptide sequences identified
-summary <- read.delim("summary.txt", stringsAsFactors = FALSE)
-print(summary[,c("Raw.file", "MS.MS.identified....", "Peptide.sequences.identified")])
+library(ggplot2)
+library(ggrepel)
+library(pheatmap)
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(enrichplot)
+library(AnnotationDbi)
 
-#Read in maxQuant proteinGroups output for analysis
-proteins <- read.delim("proteinGroups.txt", stringsAsFactors = FALSE)
+#===========================================
+# User Configuration- Edit this section only
+#===========================================
+
+# Input file name
+input_file <- "proteinGroups.txt"
+
+# Number of groups in experiment 
+# 2 = T-test only
+# 3+ = ANOVA + Tukey + pairwise comparisons 
+n_groups <- 2
+
+# Group names must match how they appear in your samples
+group_names <- c("KO", "WT")
+
+# Sample names in order - these replace the raw LFQ column names
+# Must be in the same order as the LFQ columns appear in the data
+sample_names <- c("KO_5", "KO_6", "KO_7", "KO_8", "WT_1", "WT_2", "WT_3", "WT_4")
+
+# Group assignments for each sample (same order as sample_names)
+sample_groups <- c("KO", "KO", "KO", "KO", "WT", "WT", "WT", "WT")
+
+# Intensity column pattern to search for
+# Maxquant LFQ = "LFQ", or use "Intensity" for raw intensities 
+# Change this to match your datas intensity column naming
+intensity_pattern <- "LFQ"
+
+# Output directory
+output_dir <- "./"
+
+# Thresholds 
+fdr_threshold <- 0.1 # FDR significance cutoff 
+logfc_threshold <- 0.58 # log2 fold-change cutoff (0.58 = 1.5x fold change)
+
+# Detection filter - minimum fraction of samples a protein must appear in 
+detection_threshold <- 0.7
+
+# Organism database for pathway analysis
+# org.Mm.eg.db = mouse, org.Hs.eg.db = human
+# (loaded above- change the library() call too if not mouse)
+
+#===========================================================
+# END OF USER CONFIGURATION
+#===========================================================
+
+
+# ----- Read in proteomics data -----\
+proteins <- read.delim(input_file, stringsAsFactors = FALSE)
 head(proteins)
 
-# Extract the sample columns for testing (Label Free quantification)
-sample_cols <- grep("LFQ", colnames(proteins), value = TRUE)
+# ----- Extract the intensity columns ----- 
+sample_cols <- grep(intensity_pattern, colnames(proteins), value = TRUE)
 
 cat("Found", length(sample_cols), "samples:\n")
 print(sample_cols)
 
-
-# Extract as sample columns as a matrix
+#----- Build the numeric matrix -----
 x <- as.matrix(proteins[, sample_cols])
 rownames(x) <- proteins$Majority.protein.IDs
-sum(duplicated(rownames(x)))
 
-# Clean the column names for better readability
-colnames(x) <- c("KO_5", "KO_6", "KO_7", "KO_8", "WT_1", "WT_2", "WT_3", "WT_4")
+# Check for duplicate protein IDs
+cat("Duplicate protein IDs:", sum(duplicated(rownames(x))), "\n")
 
-# Replace zeroes with NA to not skew PCA analysis 
+# ----- Rename columns using sample_names from config ----- # 
+# Safety check - number of sample_names must match the number of detected columns 
+if(length(sample_names) != length(sample_cols)){
+  stop("Number of sample_names in config (", length(sample_names),") does not match number of detected intensity columns (", length(sample_cols), ")")
+}
+
+colnames(x) <- sample_names
+
+
+#----- Replace zeroes with NA to not skew PCA analysis -----
 x[x==0] <- NA
 
-#Log transform the data with log2
+#-----Log transform -----
 x_log <- log2(x)
 head(x_log)
 
-# Median Centering normalization
-
-# Calculate the column median for each sample
-column_median <- apply(x_log, 2, median, na.rm = TRUE)
-cat("Sample medians BEFORE centering:\n")
-print(column_median)
-
-# apply median centering to each column
+# ----- Median Centering normalization ----- 
+column_median <- apply(x_log, 2 , median, na.rm = TRUE)
 x_norm <- sweep(x_log, 2, column_median, FUN = "-")
 
-# Verify all column medians are now 0
+# Verify medians are centered at 0
 cat("Sample medians after centering:\n")
-print(apply(x_norm, 2, median, na.rm = TRUE))
+print(round(apply(x_norm, 2, median, na.rm = TRUE)))
 
 
-# Boxplot to visually confirm normalization
+
+# ----- Boxplot to confirm normalization ----- 
+pdf("normalization_boxplot.pdf", width = 10, height = 6)
 boxplot(x_norm,
         las = 2,
-        main = "Median Centered LFQ Intensities",
-        ylab = "Median Centered log2 (LFQ intensities)")
+        main = "Median Centered Intensities",
+        ylab = "Median Centered log2 Intensities")
+dev.off()
 
-
-# filter proteins detected in at least 70% of samples (>= 6 out of 8)
+# -----  Filter proteins by detection rate ----- 
+# detection threshold from congif (e.g. 0.7 = present in 70% of samples)
 detection_rate <- rowMeans(!is.na(x_norm))
-keep <- detection_rate >= 0.7
+keep <- detection_rate >= detection_threshold
 x_filt <- x_norm[keep, ]
 
 cat("Proteins Before Filtering:", nrow(x_norm), "\n")
@@ -61,11 +115,14 @@ cat("Proteins After Filtering:", nrow(x_filt), "\n")
 cat("Proteins removed:", sum(!keep), "\n")
 
 
-# Define sample metadata 
+# ----- Build metadata dynamically -----  
 meta <- data.frame(
-  Sample = colnames(x_filt),
-  Group = c("KO", "KO", "KO", "KO", "WT", "WT", "WT", "WT")
+  Sample = sample_names,
+  Group = sample_groups,
+  stringsAsFactors = FALSE
 )
+
+meta$Group <- factor(meta$Group, levels = group_names)
 
 # Run PCA (Transpose so samples are rows, proteins are columns)
 
