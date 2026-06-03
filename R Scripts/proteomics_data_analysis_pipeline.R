@@ -124,28 +124,25 @@ meta <- data.frame(
 
 meta$Group <- factor(meta$Group, levels = group_names)
 
-# Run PCA (Transpose so samples are rows, proteins are columns)
+# ----- PCA -----
 
-#Remove zero variance proteins before PCA
+# Remove proteins with any missing values (PCA cant handle NAs)
 x_complete <- na.omit(x_filt)
 
-# Check the variance of each protein
+# Remove zero-variance proteins (they break scaling)
 protein_var <- apply(x_complete, 1, var)
-
-# Keep only the proteins with variance > 0 for PCA
 x_complete <- x_complete[protein_var > 0, ]
 
-cat("Proteins used for PCA:", nrow(x_complete))
+cat("Proteins used for PCA:", nrow(x_complete), "\n")
 
-
-# Transpose and run PCA 
+# Transpose so samples are rows, then run PCA 
 x_pca <- t(x_complete)
 pca_res <- prcomp(x_pca, scale. = TRUE)
 
-#Calculate the variance explained 
+#Calculate the variance explained by each PC 
 variance_explained <- (pca_res$sdev^2 / sum(pca_res$sdev^2)) * 100
 
-# Build a PCA dataframe for plotting
+# Build a PCA data frame for plotting
 pca_data <- data.frame(
   PC1 = pca_res$x[ , 1],
   PC2 = pca_res$x[ , 2],
@@ -153,69 +150,162 @@ pca_data <- data.frame(
   Group = meta$Group
 )
 
-
-library(ggplot2)
-
+pdf("pca_plot.pdf", width = 8, height = 6)
+print(
 ggplot(pca_data, aes(x = PC1, y = PC2, color = Group, label = Sample)) +
   geom_point( size = 4) +
   geom_text( vjust = -1, show.legend = FALSE) +
   labs(
-    title = "PCA Proteomics LFQ WT vs KO",
+    title = "PCA Proteomics",
     x = paste0("PC1 (", round(variance_explained[1], 1), "%)"),
     y = paste0("PC2 (", round(variance_explained[2], 1), "%)")) +
   theme_minimal() +
   theme(legend.position = "right")
-
-
-# Define our groups 
-ko_cols <- c("KO_5", "KO_6", "KO_7", "KO_8")
-wt_cols <- c("WT_1", "WT_2", "WT_3", "WT_4")
-
-results <- data.frame(
-  Protein = rownames(x_filt),
-  log2FC = NA,
-  pvalue = NA
 )
+dev.off()
 
+# ----- Reusable function for pairwise comparison between two groups -----
+# Takes two group names, the data matrix, and metadata
+# Returns a dataframe with log2FC, pvalue, and padj for every protein
 
-for( i in 1:nrow(x_filt)){
+run_pairwise_proteomics <- function(group1, group2, x_mat, meta){
   
-  ko_vals <- as.numeric(x_filt[i, ko_cols])
-  wt_vals <- as.numeric(x_filt[i, wt_cols])
+  # Get the sample names belonging to each group
+  group1_samples <- meta$Sample[meta$Group == group1]
+  group2_samples <- meta$Sample[meta$Group == group2]
   
-  # Need at least 2 non NA values per group to run t test
-  if (sum(!is.na(ko_vals)) >= 2 & sum(!is.na(wt_vals)) >= 2 &
-    var(ko_vals, na.rm = TRUE) > 0 & var(wt_vals, na.rm = TRUE) > 0)
-  {
-    t_res <- t.test(ko_vals, wt_vals)
-    results$pvalue[i] <- t_res$p.value
-    results$log2FC[i] <- mean(ko_vals, na.rm = TRUE) - mean(wt_vals, na.rm = TRUE)
+  # Build a results dataframe, one row per protein
+  res <- data.frame(
+    feature_id <- rownames(x_mat),
+    log2FC = NA,
+    pvalue = NA
+  )
+  
+  # Loop through every protein
+  for(i in 1:nrow(x_mat)){
+    
+    # Extract values for each group for this protein
+    g1_vals <- as.numeric(x_mat[i, group1_samples])
+    g2_vals <- as.numeric(x_mat[i, group2_samples])
+    
+    # Safety check, need at least 2 non-NA values per group
+    # and non-zero variance in both groups to run a t-test
+    if(sum(!is.na(g1_vals)) >= 2 & sum(!is.na(g2_vals)) >= 2 &
+       var(g1_vals, na.rm =TRUE) > 0 & var(g2_vals, na.rm = TRUE) > 0){
+      
+      t_res <- t.test(g1_vals, g2_vals)
+      res$pvalue[i] <- t_res$p.value
+      
+      # log2FC = mean of group1 minus mean of group 2
+      res$log2FC[i] <- mean(g1_vals, na.rm = TRUE) - mean(g2_vals, na.rm = TRUE)
+      
+    }
   }
+  
+  # FDR correction across all proteins
+  res$padj <- p.adjust(res$pvalue, method = "BH")
+  
+  res
 }
 
-# Multiple testing correction
-results$padj <- p.adjust(results$pvalue, method = "BH")
+# ----- Statistical Testing -----
+# t-test for 2 groups, ANOVA + Tukey for 3+ groups
+# n_groups and group_names come from config section
 
-cat("Proteins tested:", sum(!is.na(results$pvalue)), "\n")
-cat("Significant (FDR < 0.05):", sum(results$padj < 0.05, na.rm = TRUE), "\n")
-cat("Significant (FDR < 0.1):", sum(results$padj < 0.1, na.rm = TRUE), "\n")
+group <- factor(meta$Group)
+
+if(n_groups == 2){
+  
+  # For 2 groups, run a single pairwise t-test comparison
+  run_pairwise_list <- list(
+    run_pairwise_proteomics(group_names[1], group_names[2], x_filt, meta)
+  )
+  
+  # Name the comparison for downstream reference
+  
+  
+} else{
+  
+  # ----- One-way ANOVA per protein ----- 
+  # apply() runs the function on every row (protein) of x_filt
+  anova_res <- apply(x_filt, 1, function(z){
+    
+    df <- data.frame(value = z, group = group)
+    df <- df[!is.na(df$value), ]
+    
+    # Safety check - need enough data and at least 2 groups present
+    if(nrow(df) < 3 || length(unique(df$group)) < 2){
+      
+      return(data.frame(pvalue = NA))
+      
+    }
+    
+    # Fit ANOVA and extract p-value
+    fit <- aov(value ~ group, data = df)
+    p <- summary(fit)[[1]][["Pr(>F)"]][1]
+    
+    data.frame(pvalue = p)
+    
+  })
+  
+  # Combine results and add protein IDs
+  anova_res <- do.call(rbind, anova_res)
+  anova_res$feature_id <- rownames(x_filt)
+  rownames(anova_res) <- NULL
+  
+  # FDR correction 
+  anova_res$padj <- p.adjust(anova_res$pvalue, method = "BH")
+  
+  # Significant proteins only 
+  anova_sig_features <- anova_res$feature_id[anova_res$padj < fdr_threshold]
+  anova_significant_features_clean <- anova_sig_features[!is.na(anova_sig_features)]
+  
+  #----- Tukey HSD Post Hoc ----- 
+  # ANOVA says something differs; Tukey says which group differs 
+  tukey_list <- lapply(anova_significant_features_clean, function(fid){
+    z <- x_filt[fid, ]
+    df <- data.frame(value = z, group = group)
+    df <- df[!is.na(df$value), ]
+    s
+    fit <- aov(value ~ group, data = df)
+    tk <- TukeyHSD(fit)
+    
+    out <- as.data.frame(tk$group)
+    out$comparison <- rownames(out)
+    out$feature_id <- fid
+    rownames(out) <- NULL
+    out
+  })
+  
+  tukey_res <- do.call(rbind, tukey_list)
+  tukey_sig <- tukey_res %>% filter(`p adj` < fdr_threshold)
+  
+  # Generate all pairwise combination automatically ----- 
+  pairs <- combn(group_names, 2, simplify = FALSE)
+  
+  res_pairwise_list <- lappy(pairs, function(pair){
+    
+    run_pairwise_proteomics(pair[1], pair[2], x_filt, meta)
+    
+  })
+  
+  names(res_pairwise_list) <- sapply(pairs, function(pair){
+    
+    paste(pair[1], "vs", pair[2])
+  })
+  
+}
 
 
 
-## Only 13 signficant proteins, WT1 and KO7 may be contributing to this
 
-# lets check the raw p value distribution
-hist(
-  results$pvalue,
-  breaks = 50,
-  main ="Raw p values",
-  xlab = "p val",
-  col = "steelblue" 
-)
 
-# Check significant proteins before correction
-cat("Raw p < 0.05", sum(results$pvalue < 0.05, na.rm = TRUE))
-cat("Raw p < 0.01", sum(results$pvalue < 0.01, na.rm = TRUE))
+
+
+
+
+
+
 
 # Volcano plot to view statistically significant proteins 
 
