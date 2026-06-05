@@ -222,7 +222,7 @@ if(n_groups == 2){
   )
   
   # Name the comparison for downstream reference
-  
+  names(res_pairwise_list) <- paste(group_names[1], "vs", group_names[2])
   
 } else{
   
@@ -297,104 +297,146 @@ if(n_groups == 2){
 }
 
 
+# ----- Volcano Plot -----
+
+# ----- Add significance labels to each pairwise comparison ----- 
+# Loops through every comparison and labels each protein
+# Up = higher in the first group, Down = lower in the first group 
+# Thresholds come from congif (fdr_threshold, logfc_threshold)
+
+res_pairwise_list <- lapply(res_pairwise_list, function(res){
+  res$significance <- "Not Signficant"
+  res$significance[res$padj < fdr_threshold & res$logFC >= logfc_threshold] <- "Up"
+  res$significance[res$padj < fdr_threshold & res$logFC <= -logfc_threshold] <- "Down"
+  res
+})
 
 
-
-
-
-
-
-
-
-
-# Volcano plot to view statistically significant proteins 
-
-# Add significane labels 
-results$significance <- "Not Significant"
-results$significance[results$padj < 0.1 & results$log2FC >= 0.58] <- "Up in KO"
-results$significance[results$padj < 0.1 & results$log2FC <= - 0.58] <- "Down in KO"
-
-table(results$significance)
-
-# Volcano Plot
-ggplot(results, aes(x = log2FC, y = -log10(padj), color = significance)) +
-  geom_point(alpha = 0.6, size = 1.5) +
-  scale_color_manual(values = c("Not Significant" = "grey60", "Up in KO" = "red", "Down in KO" = "blue")) +
-  geom_vline(xintercept = c(-0.58,0.58), linetype = "dashed", color = "black") +
-  geom_hline(yintercept = -log10(0.1), linetype = "dashed", color = "black") +
+#----- Reusable volcano plot function ----- 
+# Builds a volcano plot for one comparison
+# Lables the top proteins by adjust p-value
+# comparison_name used for title and axis labels
+plot_volcano_proteomics <- function(res, comparison_name, top_n = 30){
   
-  geom_text_repel(data = top_labeled,
-                  aes(label = Protein),
-                  size = 3,
-                  max.overlaps = 20,
-                  box.padding = 0.3,
-                  show.legend = FALSE) +
+  # Split the comparison name into the two group names for labeling
+  groups <- strsplit(comparison_name, " vs ")[[1]]
+  group1 <- groups[1]
+  group2 <- groups[2]
   
-  labs(
-    title = "Volcano Plot KO vs WT",
-    x = "log2 Fold change (KO/WT)",
-    y = "-log10 (p-value)",
-    color = "Significance"
-  ) + theme_minimal() + theme(legend.position = "right")
+  # Get top up and top down protein by adjusted p value for labeling
+  top_up <- res[res$significance == "Up", ]
+  top_up <- top_up[order(top_up$padj), ][1:min(top_n, nrow(top_up)), ]
+  
+  top_down <- res[res$significance == "Down",]
+  top_down <- top_down[order(top_down$padj), ][1:min(top_n, nrow(top_down)), ]
+  
+  top_labeled <- rbind(top_up, top_down)
+  
+  # Build the plot 
+  ggplot(res, aes(x = log2FC, y = -log10(padj), color = significance)) +
+    geom_point(alpha = 0.6, size = 1.5) +
+    scale_color_manual(value = c("Not Significant" = "grey60", 
+                                 "Up" = "red4",
+                                 "Down" = "blue4"),
+                       labels = c(
+                         "Up" = paste("Up in", group1),
+                         "Down" = paste("Down in", group1),
+                         "Not Significant" = "Not Signficant"
+                       )) +
+    geom_vline(xintercept = c(-logfc_threshold, logfc_threshold), linetype = "dashed", color = "black")+
+    geom_hline(yintercept = -log10(fdr_threshold), linetype = "dashed", color = "grey70") +
+    geom_text_repel(
+      data = top_labeled,
+      aes(label = feature_id),
+      size = 3,
+      max.overlaps = 20,
+      box.padding = 0.3, 
+      show.legend = FALSE
+    ) +
+    labs(
+      title = paste("Volcano Plot:", comparison_name),
+      x = paste0("log2 Fold Change (", group1, "/", group2, ")"),
+      y = "-log10 (FDR)",
+      color = "Significance"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "right")
+  
+  
+}
 
-# Get the top 20 up and top 20 down by adj p value
-
-library(ggrepel)
-
-top_up <- results[results$significance == "Up in KO", ]
-top_up <- top_up[order(top_up$padj), ][1:min(20, nrow(top_up)), ]
-
-top_down<- results[results$significance == "Down in KO", ]
-top_down <- top_down[order(top_down$padj), ][1:min(20, nrow(top_down)), ]
-
-top_labeled <- rbind(top_up, top_down)
+# ----- Generate volcano plots for each comparison ----- 
+for(comparison_name in names(res_pairwise_list)){
+  res <- res_pairwise_list[[comparison_name]]
+  filename <- paste0("volcano_", gsub(" ", "_", comparison_name), ".pdf")
+  
+  pdf(filename, width = 8, height = 6)
+  print(plot_volcano_proteomics(res, comparison_name))
+  dev.off()
+}
 
 
-library(pheatmap)
+#----- Build annotation for heatmap columns (samples) -----
+# Maps each sample to its group for the colored annotation bar
+# Built from metadata so it works for any number of groups 
 
-# Get the significant proteins
-sig_proteins <- results$Protein[results$significance%in% c("Up in KO", "Down in KO")]
-
-# Subset the normalized data to significant proteins
-heatmap_data <- x_filt[rownames(x_filt) %in% sig_proteins, ]
-
-# Must remove NAs since we are using "Correlation" distance as our argument
-heatmap_data_complete <- na.omit(heatmap_data)
-
-cat("Proteins before NA removal:", nrow(heatmap_data), "\n")
-cat("Proteins after NA removal", nrow(heatmap_data_complete), "\n")
-
-
-
-
-# Create annotation for columns (samples)
 annotation_col <- data.frame(
-  Group = c("KO", "KO","KO", "KO", "WT", "WT", "WT", "WT"),
-  row.names = colnames(heatmap_data)
+  Group = meta$Group,
+  row.names = meta$Sample 
 )
 
-# Plot the heatmap
-pheatmap(
-  heatmap_data_complete,
-  annotation_col = annotation_col,
-  show_rownames = TRUE,
-  show_colnames = TRUE,
-  scale = "row",
-  cluster_rows = TRUE,
-  cluster_cols = TRUE,
-  clustering_distance_rows = "correlation",
-  clustering_distance_cols = "correlation",
-  clustering_method = "average",
-  fontsize_row = 7,
-  fontsize_col = 7,
-  treeheight_row = 100,
-  treeheight_col = 100,
-  main = "Significant Proteins KO vs WT",
-  filename = "heatmap_proteomics_LFQ.pdf",
-  width = 14,
-  height = 12
-)
+# ----- Generate heatmaps for each pairwise comparison -----
+# Loops through res_pairwise_list and creates one heatmap per comparison 
+# Shows only significant proteins for that comparison 
+# File name automatically generated based on comparison_name 
 
+for(comparison_name in names(res_pairwise_list)){
+  
+  res <- res_pairwise_list[[comparison_name]]
+  
+  # Get significant proteins for this comparison (Up and Down)
+  sig_proteins <- res$feature_id[res$Significance %in% c("Up", "Down")]
+  
+  # Subset normalized data to just these proteins 
+  heatmap_data <- x_filt[rownames(x_filt) %in% sig_proteins, ]
+  
+  # Remove proteins with NAs (correlation discant cannot handle them)
+  heatmap_data_complete <- na.omit(heatmap_data)
+  
+  # Skip this comparison if too few proteins are present
+  if(nrow(heatmap_data_complete) < 2){
+    cat("Not enough significant proteins present for:", comparison_name, "-skipping heatmap\n")
+    next
+  }
+  
+  cat(comparison_name, "-", nrow(heatmap_data_complete), "proteins in heatmap\n")
+  
+  # Create the filename automatically 
+  filename <- paste0("heatmap_", gsub(" ", "_", comparison_name), ".pdf")
+  
+  # Plot and save directly via pheatmaps filename argument 
+  pheatmap(
+    heatmap_data_complete,
+    annotation_col = annotation_col,
+    show_rownames = TRUE,
+    show_colnames = TRUE,
+    scale = "row",
+    cluster_rows = TRUE,
+    cluster_cols = TRUE,
+    clustering_distance_rows = "average",
+    clustering_distance_cols = "average",
+    clustering_method = "average",
+    fontsize_row = 7,
+    fontsize_col = 7,
+    treeheight_row = 100,
+    treeheight_col = 100,
+    main = paste("Significant Proteins:", comparison_name),
+    filename = filename,
+    width = 14,
+    height = 12
+  )
+  
+}
 
 # Pathway enrichment analysis with cluster profiler
 # We must first convert our Uniprot Ids to Entrez Gene IDs
