@@ -45,6 +45,6 @@ PCA, volcano, bar plot, and heatmap figures (PDF)
 R with the following packages:
 tidyverse, readxl, pheatmap, ggplot2, dplyr, tidyr, patchwork, ggrepel, vegan
 
-# Proteomics Analysis Pipeline 
+## Proteomics Analysis Pipeline 
 Note: This proteomics pipeline is actively under development, Core functionality is in progress - see the metabolomics pipeline above for completed work. 
 
