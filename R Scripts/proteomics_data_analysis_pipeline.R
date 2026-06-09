@@ -4,6 +4,7 @@ library(ggrepel)
 library(pheatmap)
 library(clusterProfiler)
 library(org.Mm.eg.db)
+library(org.Hs.eg.db)
 library(enrichplot)
 library(AnnotationDbi)
 
@@ -438,40 +439,140 @@ for(comparison_name in names(res_pairwise_list)){
   
 }
 
-# Pathway enrichment analysis with cluster profiler
-# We must first convert our Uniprot Ids to Entrez Gene IDs
-# Sig proteins we created earlier 
+
+# Organism for pathway analysis
+# "mouse" or "human"
+organism <- "mouse"
+
+# Enrichment p-value cutoff
+enrichment_pvalue <- 0.05
+
+# ----- Load the correct organism database based on conifg -----
+if(organism == "mouse"){
+  org_db <- org.Mm.eg.db
+  kegg_organism <- "mmu"
+} else if(organism == "human"){
+  org_db <- org.Hs.eg.db
+  kegg_organism <= "hsa"
+} else{
+  stop("organism must be either mouse or human")
+}
 
 
-library(clusterProfiler)
-library(org.Mm.eg.db)
-library(enrichplot)
-library(AnnotationDbi)
+#----- Pathway Enrichment Analysis (GO + KEGG) ----- 
+# Loops through every comparison and runs enrichment on significant proteins
+# Converts Uniprot IDs to Entrez IDs first (required by clusterProfiler)
+# Organism and database come from config (org_db, kegg_organism)
+
+for(comparison_name in names(res_pairwise_list)){
+  res <- res_pairwise_list[[comparison_name]]
+  clean_comparison <- gsub(" ", "_", comparison_name)
+  
+  cat("Pathway analysis for:", comparison_name, "===\n")
+  
+  # Get significant proteins for this comparison
+  sig_proteins <- res$feature_id[res$significance %in% c("Up","Down")]
+  
+  # Skip if too few significant proteins to bother with enrichment
+  if(length(sig_proteins) < 5){
+    cat("Fewer than 5 significant proteins - skipping enrichment \n")
+    next
+  }
+  
+  # ----- Clean protein IDs ----- 
+  # Maxquant IDs may have multiple IDs seperated by semi colons (e.g. "P12345;P67890)
+  # gsub(";.*", "", ...) keeps everything before the first semicolon
+  sig_proteins_clean <- gsub(";.*", "", sig_proteins)
+  
+  #----- Convert UniProt Ids to Entrez Gene Ids ----- 
+  # clusterProfiler requires Entrez IDs for enrichment 
+  entrez_ids <- mapIds(
+    org_db,
+    keys = sig_proteins_clean,
+    column = "ENTREZID",
+    keytype = "UNIPROT",
+    multiVals = "first"
+  )
+  
+  # Remove proteins that couldnt be mapped (NA)
+  entrez_ids <- entrez_ids[!is.na(entrez_ids)]
+  
+  cat("Mapped", length(entrez_ids), "of", length(sig_proteins_clean), "proteins to Entrez IDs\n")
+  
+  # Skip if mapping failed for too many 
+  if(length(entrez_ids) < 5) {
+    cat("Too few mapped IDs - skipping enrichment")
+    next
+  }
+    
+  
+  #----- GO Enrichment (Biological Process) ----- 
+  # enrichGo tests if significant proteins are enriched for biological processes
+  go_results <- enrichGO(
+    gene = entrez_ids,
+    OrgDb = org_db,
+    ont = "BP", # BP = Biological Process (also "MF", "CC", or "ALL"
+    pAdjustMethod = "BH",
+    pvalueCutoff = enrichment_pvalue,
+    readable = TRUE # Converts Entrez Ids back into gene symbols in output
+    )
+  # Save GO results if any were found 
+  if(!is.null(go_results) && nrow(go_results) > 0){
+    write.csv(as.data.frame(go_results), 
+              paste0("GO_enrichment_", clean_comparison, ".csv"), row.names = FALSE)
+    
+    pdf(paste0("GO_dotplot_", clean_comparison, ".pdf"), width = 10, height = 8)
+    print(dotplot(go_results, showCategory = 20, title = paste("GO BP:", comparison_name)))
+    dev.off()
+    
+    cat("GO Enrichment:", nrow(go_results), "significant terms\n")
+  } else{
+    cat("No significant GO terms found\n")
+  }
+  
+  #----- KEGG pathway enrichment ----- 
+  # enrichKEGG tests if significant proteins are enriched for KEGG pathways 
+  kegg_results <- enrichKEGG(
+    gene = entrez_ids,
+    organism = kegg_organism,
+    pAdjustMethod = "BH",
+    pvalueCutoff = enrichment_pvalue
+  )
+  
+  # Save KEGG results if any were found 
+  if(!is.null(kegg_results) && nrow(kegg_results) > 0){
+    write.csv(as.data.frame(kegg_results), 
+              paste0("KEGG_enrichment_", clean_comparison, ".csv"),
+              row.names = FALSE)
+    
+    pdf(paste0("KEGG_dotplot_", clean_comparison, ".csv"), width = 10, height = 9)
+    print(dotplot(kegg_results, showCategory = 20, title = paste("KEGG:", comparison_name)))
+    dev.off()
+    
+    cat("KEGG Enrichment:", nrow(kegg_results), "significant pathways\n")
+    
+  }else{
+    cat("No significant KEGG pathways found\n")
+  }
+  
+
+}
 
 
-# Clean up our protein ids
-# Some may have multiple ids seperated by semicolons e.g. "P12334;P123342"
-# Take the first one
-
-sig_proteins_clean <- gsub(";,", "", sig_proteins)
-
-cat("Significant proteins before cleaning:", length(sig_proteins), "\n")
-cat("Significant proteins after cleaning:", length(sig_proteins_clean), "\n")
-
-# Convert the Uniprot Ids to the Entrez Gene Ids 
-entrez_ids <- mapIds(
-  org.Mm.eg.db,
-  keys = sig_proteins_clean,
-  column = "ENTREZID",
-  keytype = "UNIPROT",
-  multiVals = "first"
-)
-
-# Remove NAS (proteins that couldnt be mapped)
-entrez_ids <- entrez_ids[!is.na(entrez_ids)]
 
 
-#HELLO
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
