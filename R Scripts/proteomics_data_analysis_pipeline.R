@@ -106,7 +106,7 @@ boxplot(x_norm,
 dev.off()
 
 # -----  Filter proteins by detection rate ----- 
-# detection threshold from congif (e.g. 0.7 = present in 70% of samples)
+# detection threshold from config (e.g. 0.7 = present in 70% of samples)
 detection_rate <- rowMeans(!is.na(x_norm))
 keep <- detection_rate >= detection_threshold
 x_filt <- x_norm[keep, ]
@@ -177,7 +177,7 @@ run_pairwise_proteomics <- function(group1, group2, x_mat, meta){
   
   # Build a results dataframe, one row per protein
   res <- data.frame(
-    feature_id <- rownames(x_mat),
+    feature_id = rownames(x_mat),
     log2FC = NA,
     pvalue = NA
   )
@@ -218,7 +218,7 @@ group <- factor(meta$Group)
 if(n_groups == 2){
   
   # For 2 groups, run a single pairwise t-test comparison
-  run_pairwise_list <- list(
+  res_pairwise_list <- list(
     run_pairwise_proteomics(group_names[1], group_names[2], x_filt, meta)
   )
   
@@ -306,9 +306,9 @@ if(n_groups == 2){
 # Thresholds come from congif (fdr_threshold, logfc_threshold)
 
 res_pairwise_list <- lapply(res_pairwise_list, function(res){
-  res$significance <- "Not Signficant"
-  res$significance[res$padj < fdr_threshold & res$logFC >= logfc_threshold] <- "Up"
-  res$significance[res$padj < fdr_threshold & res$logFC <= -logfc_threshold] <- "Down"
+  res$significance <- "Not Significant"
+  res$significance[res$padj < fdr_threshold & res$log2FC >= logfc_threshold] <- "Up"
+  res$significance[res$padj < fdr_threshold & res$log2FC <= -logfc_threshold] <- "Down"
   res
 })
 
@@ -336,7 +336,7 @@ plot_volcano_proteomics <- function(res, comparison_name, top_n = 30){
   # Build the plot 
   ggplot(res, aes(x = log2FC, y = -log10(padj), color = significance)) +
     geom_point(alpha = 0.6, size = 1.5) +
-    scale_color_manual(value = c("Not Significant" = "grey60", 
+    scale_color_manual(values = c("Not Significant" = "grey60", 
                                  "Up" = "red4",
                                  "Down" = "blue4"),
                        labels = c(
@@ -396,7 +396,7 @@ for(comparison_name in names(res_pairwise_list)){
   res <- res_pairwise_list[[comparison_name]]
   
   # Get significant proteins for this comparison (Up and Down)
-  sig_proteins <- res$feature_id[res$Significance %in% c("Up", "Down")]
+  sig_proteins <- res$feature_id[res$significance %in% c("Up", "Down")]
   
   # Subset normalized data to just these proteins 
   heatmap_data <- x_filt[rownames(x_filt) %in% sig_proteins, ]
@@ -424,8 +424,8 @@ for(comparison_name in names(res_pairwise_list)){
     scale = "row",
     cluster_rows = TRUE,
     cluster_cols = TRUE,
-    clustering_distance_rows = "average",
-    clustering_distance_cols = "average",
+    clustering_distance_rows = "correlation",
+    clustering_distance_cols = "correlation",
     clustering_method = "average",
     fontsize_row = 7,
     fontsize_col = 7,
@@ -545,7 +545,7 @@ for(comparison_name in names(res_pairwise_list)){
               paste0("KEGG_enrichment_", clean_comparison, ".csv"),
               row.names = FALSE)
     
-    pdf(paste0("KEGG_dotplot_", clean_comparison, ".csv"), width = 10, height = 9)
+    pdf(paste0("KEGG_dotplot_", clean_comparison, ".pdf"), width = 10, height = 9)
     print(dotplot(kegg_results, showCategory = 20, title = paste("KEGG:", comparison_name)))
     dev.off()
     
