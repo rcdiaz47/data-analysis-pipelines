@@ -49,13 +49,13 @@ tidyverse, readxl, pheatmap, ggplot2, dplyr, tidyr, patchwork, ggrepel, vegan
 A reproducibile R pipeline for downstream analysis of label-free quanitifcation (LFQ) prteomics data. Like the metabolomics pipeline, it dynamically adapts to the number of experimental groups and runs the appropriate statistical test, extending the analysis through to pathway enrichment for biological interpretation.
 
 ### Features
-**Dynamic group handling** - t-test for 2 groups, one-way ANOVA with Tukey HSD post-hoc for 3+ groups
-**Automatic pairwise comparison** - generates every group comparison without hardcoding
-**Reproducibile preprocessing** - log2 transformation, median centering normalization, and detection-rate filtering
-**Pathway enrichment** - GO (Biological process) and KEGG pathway enrichment via clusterProfiler, with automatic UniProt-to-Entrez ID mapping
-**Organism support** - configurable for mouse or human
-**Publication-quality figures** - PCA plots, volcano plots, clustered heatmaps, and enrichment dotplots 
-**Configurable thresholds** - FDR, fold-change, and enrichment cutoffs set in one place 
+- **Dynamic group handling:** t-test for 2 groups, one-way ANOVA with Tukey HSD post-hoc for 3+ groups
+- **Automatic pairwise comparison:** generates every group comparison without hardcoding
+- **Reproducibile preprocessing:** log2 transformation, median centering normalization, and detection-rate filtering
+- **Pathway enrichment:** GO (Biological process) and KEGG pathway enrichment via clusterProfiler, with automatic UniProt-to-Entrez ID mapping
+- **Organism support:** configurable for mouse or human
+- **Publication-quality figures:** PCA plots, volcano plots, clustered heatmaps, and enrichment dotplots 
+- **Configurable thresholds:** FDR, fold-change, and enrichment cutoffs set in one place 
 
 ### How to Use
 All settings are controlled from the configuration section at the top of the script:
