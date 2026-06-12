@@ -107,6 +107,93 @@ cat("Metabolites", nrow(data_matrix), "\n")
 cat("Groups:\n")
 print(table(meta$Group))
 
+# ======================================
+# SECTION 2: ML WORKFLOW (general/reproducible)
+# Prepares the data, trains a Random Forest classifier
+# Evaluates performance, and extracts feature importance
+# Works on any standard matrix + metadata 
+# ========================================
+
+# ----- Prepare the data for Random Forest ----- 
+# randomForest expects samples as rows and features as columns
+# right now we have metabolites as rows, so we transpose it 
+x_ml <- t(data_matrix)
+
+# ----- Handle the missing values ----- 
+# randomForest cannot handle NAs 
+# check how many missing values we have
+
+cat("Missing values:", sum(is.na(x_ml)), "\n")
+
+# Remove the metabolites that are entirely NA
+x_ml <- x_ml[ , colSums(is.na(x_ml)) < nrow(x_ml)]
+
+# Simple approach: impute NAs with the column (metabolite) median
+# For each metabolite, replace any NA with that metabolites median value 
+
+for(i in 1:ncol(x_ml)){
+  na_positions <- is.na(x_ml[, i])
+  if(any(na_positions)){
+    x_ml[na_positions, i] <- median(x_ml[, i], na.rm = TRUE)
+  }
+}
+
+cat("Missing values after imputation", sum(is.na(x_ml)), "\n")
+
+# ----- Attach the group labels as the classification target ----- 
+# The Group column from meta becomes what we are predicting 
+# Must be a factor for randomForest to do classification (not regression)
+# Make sure the sample order in meta matches the rows of x_ml
+
+y <- factor(meta$Group[match(rownames(x_ml), meta$Sample)])
+
+cat("Class distribution:\n")
+print(table(y))
+
+
+# ----- Train/Test split (stratified) ----- 
+# SPlit data into training (build the model) and test (evaluate it) set
+# Stratified = preserves the class proportions in both sets
+# Important for imbalanced data so we dont end up with too few of one class
+# train_proportion comes from config 
+
+# createDataPartition from caret does stratified splitting automatically
+# It returns the row indices to use for training 
+train_index <- createDataPartition(y, p = train_proportion, list = FALSE)
+
+# Split the features 
+x_train <- x_ml[train_index,]
+x_test <- x_ml[-train_index,]
+
+# Split the labels
+y_train <- y[train_index]
+y_test <- y[-train_index]
+
+# ----- Confirm the split ----- 
+cat("Training samples:", nrow(x_train), "\n")
+cat("Test samples:", nrow(x_test), "\n")
+
+cat("\nTraining Class Distribution:\n")
+print(table(y_train))
+
+cat("\nTest Class Distribution:\n")
+print(table(y_test))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

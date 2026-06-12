@@ -555,7 +555,6 @@ for(comparison_name in names(res_pairwise_list)){
     cat("No significant KEGG pathways found\n")
   }
   
-
 }
 
 
