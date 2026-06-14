@@ -17,9 +17,9 @@ library(pheatmap) # visualizing important features
 # Raw metabolomics workbench named metabolite data file 
 raw_input_file <- "MSdata_ST003506_1.txt"
 
-# Which sample sourse to keep for a clean comparison
+# Which sample source to keep for a clean comparison
 # This dataset mixes Blood serum and interstitial fluid
-# set to the source you wnt, or null to keep all samples
+# set to the source you want, or null to keep all samples
 
 sample_source_filter <- "Blood serum"
 
@@ -128,6 +128,7 @@ cat("Missing values:", sum(is.na(x_ml)), "\n")
 # Remove the metabolites that are entirely NA
 x_ml <- x_ml[ , colSums(is.na(x_ml)) < nrow(x_ml)]
 
+
 # Simple approach: impute NAs with the column (metabolite) median
 # For each metabolite, replace any NA with that metabolites median value 
 
@@ -152,7 +153,7 @@ print(table(y))
 
 
 # ----- Train/Test split (stratified) ----- 
-# SPlit data into training (build the model) and test (evaluate it) set
+# Split data into training (build the model) and test (evaluate it) set
 # Stratified = preserves the class proportions in both sets
 # Important for imbalanced data so we dont end up with too few of one class
 # train_proportion comes from config 
@@ -179,11 +180,23 @@ print(table(y_train))
 cat("\nTest Class Distribution:\n")
 print(table(y_test))
 
+#----- Train the random forest model -----
+# Builds the classifier using ONLY the training data
+# The model learns patterns in the metabolites values that distinguish the groups
+# n_trees comes from the user config section
 
+rf_model <- randomForest(
+  x = x_train, # training features (metabolite values)
+  y = y_train, # training groups (control/lymphedema)
+  ntree = n_trees, # number of trees in the forest 
+  importance = TRUE # calculate feature importance so we can extract it later
+)
 
+# ----- View the model summary ----- 
+# Prints the model details including out-of-bag error (OOB) estimate
+print(rf_model)
 
-
-
+# ----- Extract feature importance ----- 
 
 
 
