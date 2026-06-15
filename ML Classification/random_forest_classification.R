@@ -197,15 +197,45 @@ rf_model <- randomForest(
 print(rf_model)
 
 # ----- Extract feature importance ----- 
+# Random Forest tracks  how much each metabolite contributed to classifications
+# MeanDecreasedGini: how much each feature improves node purity across all trees
+# Higher values = more important for distinguishing the groups 
+# top_features comes from user config section
+
+# Pull importance scores into dataframe
+importance_df <- as.data.frame(importance(rf_model))
+importance_df$Metabolite <- rownames(importance_df)
 
 
+# Sort by MeanDecreasedGini and take the top N
+top_importance <- importance_df %>%
+  arrange(desc(MeanDecreaseGini)) %>%
+  slice_head(n=top_features)
 
+# ----- Plot the feature importance ----- 
+pdf("rf_feature_importance.pdf", width = 8, height = 6)
+print(
+  ggplot(top_importance, aes(x = reorder(Metabolite, MeanDecreasedGini), y = MeanDecreasedGini)) +
+    geom_col(fill = "steelblue") +
+    coord_flip() +
+    labs(
+      title = paste0("Top", top_features, "Metabolites by Importance"),
+      subtitle = "Rabdom Forest - Control vs Lymphedema",
+      x = "",
+      y = "Mean Decrease in Gini"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      plot.subtitle = element_text(hjust = 0.5),
+      axis.text.y = element_text(size = 8)
+    )
+)
+ dev.off()
 
-
-
-
-
-
+# Print the top features to console
+ cat("\nTop", top_features, "most important metabolites:\n")
+ print(top_importance[, c("Metabolite", "MeanDecreaseGini")])
 
 
 
