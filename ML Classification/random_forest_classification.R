@@ -234,8 +234,76 @@ print(
  dev.off()
 
 # Print the top features to console
- cat("\nTop", top_features, "most important metabolites:\n")
- print(top_importance[, c("Metabolite", "MeanDecreaseGini")])
+cat("\nTop", top_features, "most important metabolites:\n")
+print(top_importance[, c("Metabolite", "MeanDecreaseGini")])
+
+# ----- Evaluate the model on the test set ---- 
+# The test set is data the model never saw during training
+# This checks how well the model generalizes to new samples
+# with only ~ 10 samples, this is treated as a demonstration not robust metric
+ 
+# Make predictions on the test set 
+predictions <- predict(rf_model, x_test)
+
+# ----- Confusion Matrix -----
+# Compares the predicted labels against the true test labels 
+# Reports accuracy plus per-class performance 
+conf_matrix <- confusionMatrix(predictions, y_test)
+
+# Print the full evaluation
+print(conf_matrix)
+
+
+# ----- Workflow Summary ----- 
+# Prints a clean recap of the analysis for quick reference 
+
+cat("\n==================================\n")
+cat("Random Forest Classification Summary\n")
+cat("\n==================================\n")
+
+cat("\nDataset:\n")
+cat(" Total samples:", nrow(x_ml), "\n")
+cat(" Features (metabolites)", ncol(x_ml), "\n")
+cat(" Classes:", paste(levels(y), collapse = ', '), "\n")
+
+cat("\nClass distribution:\n")
+print(table(y))
+
+cat("\nTraining/Test split:\n")
+cat(" Training samples:", nrow(x_train), "\n")
+cat(" Test samples:", nrow(x_test), "\n")
+
+cat("\nModel:\n")
+cat(" Trees:", n_trees, "\n")
+cat(" OOB error rate:", round(rf_model$err.rate[n_trees, "OOB"] * 100, 2), "%\n")
+
+cat("\nTest set accuracy:", round(conf_matrix$overall["Accuracy"] * 100, 2), "%\n")
+
+cat("\nTop 5 important metabolites:\n")
+print(head(top_importance[,c("Metabolite", "MeanDecreaseGini")], 5))
+
+cat("\nNote: Perfect seperation reflects high feature-to-sample\n")
+cat("ratio (", ncol(x_ml), "features,", nrow(x_ml), "samples). Results\n")
+cat("demonstrate the workflow; robust claims require an independent cohort.\n")
+
+cat("=============================================\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

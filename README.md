@@ -84,13 +84,34 @@ R with the following packages:
 dplyr, ggplot2, ggrepel, pheatmap, clusterProfiler, org.Mm.eg.db, org.Hs.eg.db, enrichPlot, AnnotationDbi
 ```
 
+## Machine Learning: Metabolomics Classification
 
+A Random Forest classification workflow demonstrating supervised machine learning applied to metabolomics data. The pipeline predicts disease status (Control vs Lymphedema) from serum metabolite profiles and identifies the most discriminating metabolites via feature importance.
 
+### Dataset
 
+Public NMR metabolomics data from Metabolomics Workbench study ST003506 (breast cancer related lymphedema vs healthy controls). Data is not inlcuded in this repository and can be downloaded directly from the source (DOI: 10.21228/M8FR6S).
 
+### Workflow 
 
+- **Dataset-specific ingestion** - parses through the Metabolomics Workbench format, extracting group labels, filters to blood serum samples, and outputs a clean matrix and metadata
+- **Data preparation** - transposes to samples as rows, removes and empty features, and imputes missing values with the metabolite median
+- **Stratified train/test split** - preserves class proportions across training and test sets, important for imbalance data
+- **Random Forest training** - trains a classifier with user configurable tree count, and OOB estimation
+- **Feature importance** - ranks metabolites by their contribution to classification (Mean Decrease in Gini)
+- **Evaluation** - confusion matrix with accuracy, sensitivity, and specificity on the test set that was held out
 
+### Key Result 
 
+The model's feature importance independently identified 5 of the 7 metabolomic biomarkers reported in the original study: 3-methyl-2-oxovalerate, pyruvate, 2-ketoisovalerate, ketoleucine, and tryptophan. This suggests that the model captured biologically meaningful signal. Several of these are branched chain amino acid degradation products, consistent with BCAA altered metabolism. 
+
+### Limitations
+
+With 49 features and 34 samples, the model achieves perfect separation, which reflects the high feature-to-sample ratio rather than a genuinely robust classifier. This project demonstrates an end-to-end ML workflow. Reliable performance claims would need feature selection and validation in an independent cohort. 
+
+### Requirements 
+
+R: with tidyverse, randomForest, caret, pheatmap 
 
 
 
