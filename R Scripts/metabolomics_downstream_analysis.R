@@ -40,6 +40,9 @@ logfc_threshold <- 1
 # Column containing the metabolite names
 name_column <- "Name"
 
+# Prefix used to identify peak area columns
+sample_area_prefix <- "Group Area:"
+
 
 #=========================================
 # END USER CONFIGURATION
@@ -116,7 +119,7 @@ cd[[name_column]] <- process_metabolite_names(cd[[name_column]], max_length = 40
 
 
 # ----- Build the numeric matrix with the columns we want to use for analyzing ----- #
-area_cols <- grep("^Group Area:", colnames(cd), value = TRUE)
+area_cols <- grep(paste0("^", sample_area_prefix), colnames(cd), value = TRUE)
 
 # Exclude blanks and QCs from the analysis
 area_cols <- area_cols[!grepl("Blank|blank|BLANK|QC|Qc", area_cols)]
@@ -126,7 +129,9 @@ if (length(area_cols) == 0){
   stop(
     paste0(
       "No sample area columns were found.\n",
-      "Expected column names beginning with 'Group Area:'."
+      "Expected column names beginning with '",
+      sample_area_prefix,
+      "'."
     )
   )
 }
