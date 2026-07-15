@@ -29,7 +29,7 @@ n_groups <- 2
 group_names <- c("WT", "WRN")
 
 # Output directory for plots and csv files ("./) for current directory
-output_dir <- "./"
+output_dir <- "./results"
 
 # FDR significant threshold
 fdr_threshold <- 0.05
@@ -37,28 +37,82 @@ fdr_threshold <- 0.05
 # Log2fold change threshold for plots
 logfc_threshold <- 1
 
+# Column containing the metabolite names
+name_column <- "Name"
+
 
 #=========================================
 # END USER CONFIGURATION
 #=========================================
 
+# Create output directory if it does not exist already
+if (!dir.exists(output_dir)){
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Helper function for creating output file paths 
+output_path <- function(filename){
+  
+  file.path(output_dir, filename)
+  
+}
+
+# Validate the input file 
+
+if(!file.exists(input_file)){
+  stop(
+    paste0(
+      "Input file not found: ",
+      input_file,
+      "\n Please check the input_file path in the user configuration section."
+    )
+  )
+}
+
+
+# Read input data
 
 cd <- read_xlsx(input_file)
+
 head(cd)
+
+# Validate the metabolite name column 
+if(!name_column %in% colnames(cd)){
+  stop(
+    paste0(
+      "The configured metabolite name column '",
+      name_column,
+      "'was not found in the input file.\n",
+      "Avaliable columns are: ",
+      paste(colnames(cd), collapse = " ,")
+    )
+  )
+}
+
+
+# Validate that the name column exists 
 
 # ------ Clean and shorten the metabolite names for readability ------ #
 process_metabolite_names <- function(x, max_length = 40){
+  
   x %>%
+    
     gsub("\\.", " ", .) %>% #Replace dots with spaces
+    
     gsub("\\.\\d+$", "", .) %>% #Remove trailing .1, .2, etc. 
+    
     gsub("\\s+", " ", .) %>% # Replace multiple spaces with single space
+    
     trimws() %>% #Remove leading/trailing whitespace
   
   ifelse(nchar(.) > max_length,
+         
          paste0(substr(., 1, max_length - 3), "..."), .)
+  
 }
 
-cd$Name <- process_metabolite_names(cd$Name, max_length = 40)
+
+cd[[name_column]] <- process_metabolite_names(cd[[name_column]], max_length = 40)
 
 
 # ----- Build the numeric matrix with the columns we want to use for analyzing ----- #
@@ -67,14 +121,26 @@ area_cols <- grep("^Group Area:", colnames(cd), value = TRUE)
 # Exclude blanks and QCs from the analysis
 area_cols <- area_cols[!grepl("Blank|blank|BLANK|QC|Qc", area_cols)]
 
+# Area columns check
+if (length(area_cols) == 0){
+  stop(
+    paste0(
+      "No sample area columns were found.\n",
+      "Expected column names beginning with 'Group Area:'."
+    )
+  )
+}
+
 
 x <- cd %>%
+  
   dplyr::select(all_of(area_cols)) %>% as.matrix()
 
-rownames(x) <- cd$Name
+rownames(x) <- cd[[name_column]]
 
 # ----- Replace missing values with Nas ----- #
 sum(is.na(x))
+
 x[x== ""] <- NA
 
 # ----- Log transform the data with log2 ------ #
@@ -82,6 +148,7 @@ x_log <- log2(x)
 
 # ----- Drop metabolites that are missing in too many samples ----- #
 keep <- rowMeans(!is.na(x_log)) >= 0.7
+
 x_filt <- x_log[keep,]
 
 
@@ -90,75 +157,112 @@ column_median <- apply(x_filt,2,median, na.rm = TRUE)
 
 # Subtract each columns median from the value 
 x_norm <- sweep(
+  
   x_filt, 2, column_median, FUN = "-"
+  
 )
 
 summary(x_norm[,1])
+
 any(is.na(x_norm))
+
 nrow(x_norm)
 
 # --- Prepare data for plotting; Box and whisker plots and Density plot --- #
 
 # Before normalization 
 before_df <- x %>%
+  
   as.data.frame() %>% 
+  
   tibble::rownames_to_column("metabolite") %>%
+  
   pivot_longer(-metabolite, names_to = "sample", values_to = "value")
 
 # After normalization 
 after_df <- x_norm %>%
+  
   as.data.frame() %>%
+  
   tibble::rownames_to_column("metabolite") %>%
+  
   pivot_longer(-metabolite, names_to = "sample", values_to = "values")
 
 # --- Density Plots --- #
 p1 <- ggplot(before_df, aes(x=value)) + 
+  
   geom_density(fill = "blue", alpha = 0.4) +
+  
   labs(title ="Before Normalization" , x = "Raw Intensity", y = "Density") +
+  
   theme_minimal()
 
 p2 <- ggplot(after_df, aes(x = values)) +
+  
   geom_density(fill = "blue", alpha = 0.4) +
+  
   labs(title = "After Normalization", x = "Normalized Intensity", y = "Density") +
+  
   theme_minimal()
 
 # --- Boxplots (Subset so they dont look all compressed) ---- #
 
 before_df <- x[1:50, ] %>%
+  
   as.data.frame() %>%
+  
   tibble::rownames_to_column("metabolite") %>%
+  
   pivot_longer(-metabolite, names_to = "sample", values_to = "value")
 
 after_df <- x_norm[1:50, ] %>%
+  
   as.data.frame() %>%
+  
   tibble::rownames_to_column("metabolite") %>%
+  
   pivot_longer(-metabolite, names_to = "sample", values_to = "value")
 
 
 p3 <- ggplot(before_df, aes(x = metabolite, y = value)) +
+  
   geom_boxplot(fill = "lightgreen") +
+  
   coord_flip() + 
+  
   labs(x = "", y = "Before Normalization") + 
-  theme_minimal() + 
+  
+  theme_minimal() +
+  
   theme(axis.text.y = element_text(size = 6))
 
 p4 <- ggplot(after_df, aes(x = metabolite, y = value)) +
+  
   geom_boxplot(fill = "lightgreen") +
+  
   coord_flip() + 
+  
   labs(x = "", y = "After Normalization") + 
+  
   theme_minimal() + 
+  
   theme(axis.text.y = element_text(size = 6))
 
 # ---- Combine all the plots into one figure ----#
 data_boxplots <- (p3|p4)
+
 data_density_plots <- (p1|p2)
 
 pdf("data_boxplots_before_norm_2.pdf", width = 10, height = 6)
+
 plot(data_boxplots)
+
 dev.off()
 
 pdf("data_density_plots_before_norm.pdf", width = 8, height = 6)
+
 plot(data_density_plots)
+
 dev.off()
 
 
@@ -168,16 +272,24 @@ dev.off()
 
 if(n_groups == 2){
   meta <- data.frame(
+    
     Sample = area_cols,
+    
     Group = ifelse(grepl(group_names[1], area_cols), group_names[1], group_names[2]),
+    
     stringsAsFactors = FALSE
   )
 } else{
   meta <- data.frame(
+    
     Sample = area_cols,
+    
     Group = sapply(area_cols, function(s){
+      
       matched <- group_names[sapply(group_names, function(g) grepl(g,s))]
-      if (length(matched) == 1) matched else NA 
+      
+      if (length(matched) == 1) matched else NA
+      
     }),
     
     stringsAsFactors = FALSE
@@ -197,10 +309,11 @@ pca_res <- prcomp(x_pca, scale. = TRUE)
 
 # Extract the PCA scores and add group information to prepare for plotting 
 pca_scores <- as.data.frame(pca_res$x)
+
 pca_scores$Group <- meta$Group
 
 # Plot 
-pdf("pca_plot.pdf", width = 8, height = 6)
+pdf(output_path("pca_plot.pdf"), width = 8, height = 6)
 
 ggplot(pca_scores, aes(x = PC1, y=PC2, color = Group)) +
   geom_point(size = 3) +
@@ -258,7 +371,9 @@ dev.off()
 # ---- Reusable function for pairwise analysis of groups ---- #
 
 run_pairwise <- function(group1, group2, x_mat, meta){
+  
   samples_keep <- meta$Sample[meta$Group %in% c(group1, group2)]
+  
   groups_keep <- meta$Group[meta$Group %in% c(group1, group2)]
   
   x_sub <- x_mat[,samples_keep]
@@ -278,6 +393,7 @@ run_pairwise <- function(group1, group2, x_mat, meta){
     
     # LogFC (difference in means)
     m1 <- mean(df$value[df$group == group1], na.rm = TRUE)
+    
     m2 <- mean(df$value[df$group == group2], na.rm = TRUE)
     
     logFC = m1 - m2
@@ -292,7 +408,9 @@ run_pairwise <- function(group1, group2, x_mat, meta){
   })
   
   res <- as.data.frame((t(res)))
+  
   res$feature_id <- rownames(x_mat)
+  
   res$padj <- p.adjust(res$pvalue, method = "BH")
   
   res
@@ -308,12 +426,15 @@ if(n_groups == 2){
   # For 2 groups we skip ANOVA and Tukey entirely
   # run_pairwise already runs a t-test internally
   res_pairwise_list <- list(
+    
     run_pairwise(group_names[1], group_names[2], x_norm, meta)
   )
   
   # Name the comparison so we can reference it later 
   names(res_pairwise_list) <- paste(group_names[1], "vs", group_names[2])
+  
 } else{
+  
   # ----- One Way Anova Per Metabolite ----- #
   # apply() runs the function on every row (metabolite) of x_norm 
   # MARGIN = 1 means rows, 2 would mean columns 
@@ -348,7 +469,9 @@ if(n_groups == 2){
   # Combine all the results into one dataframe
   # do.call(rbind) stacks all the individual results row by row
   anova_res <- do.call(rbind, anova_res)
+  
   anova_res$feature_id <- rownames(x_norm)
+  
   rownames(anova_res) <- NULL
   
   
@@ -360,6 +483,7 @@ if(n_groups == 2){
   
   # Filter for significant features only, remove NAs
   anova_sig_features <- anova_res$feature_id[anova_res$padj < fdr_threshold]
+  
   anova_significant_features_clean <- anova_sig_features[!is.na(anova_sig_features)]
   
   #----- Tukey HSD Post Hoc ----- #
@@ -378,13 +502,17 @@ if(n_groups == 2){
     tk <- TukeyHSD(fit)
     
     out <- as.data.frame(tk$group)
+    
     out$comparison <- rownames(out)
+    
     out$feature_id <- fid
+    
     rownames(out) <- NULL
     out
   })
   
   tukey_res <- do.call(rbind, tukey_list)
+  
   tukey_sig <- tukey_res %>% filter(`p adj` < fdr_threshold)
   
   # ----- Generate all the pairwise combinations automatically ----- 
@@ -469,6 +597,7 @@ cat("====================================\n")
 
 # Annotation 
 annotation_col <- meta %>% select(Group)
+
 rownames(annotation_col) <- meta$Sample
 
 if(n_groups >2){
@@ -481,12 +610,16 @@ cat("Percentage Significant: ",
 
 # Heatmap
 top_anova_metabolites <-  anova_res %>%
-  filter(!is.na(feature_id) & padj < 0.05) %>%
+  
+  filter(!is.na(feature_id) & padj < fdr_threshold) %>%
+  
   arrange(padj) %>%
+  
   slice_head(n = 30) %>% # Top 30 for heatmap 
+  
   pull(feature_id)
   
-pdf("heatmap_anova_top30.pdf", width = 14, height =10)
+pdf(output_path("heatmap_anova_top30.pdf"), width = 14, height =10)
 
 print(pheatmap(
   x_norm[top_anova_metabolites,],
@@ -508,7 +641,7 @@ dev.off()
 
 # Boxplots
 top6_anova <- anova_res %>%
-  filter(!is.na(feature_id) & padj < 0.05) %>%
+  filter(!is.na(feature_id) & padj < fdr_threshold) %>%
   arrange(padj) %>%
   slice_head(n=6) %>%
   pull(feature_id)
@@ -521,7 +654,7 @@ plot_data_anova <- x_norm[top6_anova, ] %>%
 
 
 # Create boxplots
-pdf("anova_boxplots_top6.pdf", width = 8, height = 6)
+pdf(output_path("anova_boxplots_top6.pdf"), width = 8, height = 6)
 
 print(ggplot(plot_data_anova, aes(x = Group, y = abundance, fill = Group)) +
   geom_boxplot(outlier.shape = NA) +
@@ -590,7 +723,7 @@ plot_volcano <- function(res, title, top_n = 35) {
                 alpha = 0.8,
                 size = 2.5) +
     
-    geom_hline(yintercept = -log10(0.05), linetype = "dashed",
+    geom_hline(yintercept = -log10(fdr_threshold), linetype = "dashed",
                color = "grey50", linewidth = 0.4) +
     
     geom_vline(xintercept =c(-1,1) , linetype = "dashed",
@@ -662,6 +795,7 @@ plot_volcano <- function(res, title, top_n = 35) {
 # File is named automatically based on comparison name
 
 for(comparison_name in names(res_pairwise_list)){
+  
   # Get the result dataframe for this comparison
   res <- res_pairwise_list[[comparison_name]]
   
@@ -669,8 +803,10 @@ for(comparison_name in names(res_pairwise_list)){
   # Example: "NL vs Y" becomes "NL_vs_Y"
   filename <- paste0("volcano_plot_", gsub(" ", "_", comparison_name), ".pdf")
   
-  pdf(filename, width = 8, height = 6)
+  pdf(output_path(filename), width = 8, height = 6)
+  
   print(plot_volcano(res, comparison_name))
+  
   dev.off()
 }
 
@@ -681,7 +817,7 @@ plot_fc_barplot <- function(res_df, comparison_name, n_metabolites = 10){
   
   # Get the top metabolites by absolute fold change 
   top_fc <- res_df %>%
-    filter(padj < 0.05) %>%
+    filter(padj < fdr_threshold) %>%
     arrange(desc(abs(logFC))) %>%
     slice_head(n = n_metabolites)
   
@@ -747,7 +883,7 @@ for(comparison_name in names(res_pairwise_clean)){
   # Example: "NL vs Y" becomes "NL_vs_Y.pdf"
   filename <- paste0("barplot_", gsub(" ", "_", comparison_name), ".pdf")
   
-  pdf(filename, width = 8, height = 6)
+  pdf(output_path(filename), width = 8, height = 6)
   print(plot_fc_barplot(res_clean, comparison_name, n_metabolites = 15))
   dev.off()
   }
@@ -782,7 +918,7 @@ for(comparison_name in names(res_pairwise_clean)){
   # Create the file name automatically
   filename <- paste0("heatmap_", gsub(" ", "_", comparison_name), ".pdf")
   
-  pdf(filename, width = 12, height = 12)
+  pdf(output_path(filename), width = 12, height = 12)
   
   print(pheatmap(
     heat_data,
@@ -816,14 +952,14 @@ for(comparison_name in names(res_pairwise_list)){
   # Export full results
   write.csv(
     res_pairwise_list[[comparison_name]],
-    paste0("pairwise_", clean_comparison, "_full.csv"),
+    output_path(paste0("pairwise_", clean_comparison, "_full.csv")),
     row.names = FALSE
   )
   
   # Export cleaned results
   write.csv(
     res_pairwise_clean[[comparison_name]],
-    paste0("pairwise_", clean_comparison, "_clean.csv"),
+    output_path(paste0("pairwise_", clean_comparison, "_clean.csv")),
     row.names = FALSE
   )
   
@@ -834,7 +970,7 @@ for(comparison_name in names(res_pairwise_list)){
   
   write.csv(
     data.frame(metabolite = sig_metabs),
-    paste0("pathway_input_", clean_comparison, ".csv"),
+    output_path(paste0("pathway_input_", clean_comparison, ".csv")),
     row.names = FALSE
   )
   
@@ -842,18 +978,18 @@ for(comparison_name in names(res_pairwise_list)){
 
 # Export ANOVA and Tukey Results only if 3+ groups
 if(n_groups > 2){
-  write.csv(anova_res, "anova_all_results.csv", row.names = FALSE)
-  write.csv(anova_res %>% filter(padj < fdr_threshold), "anova_significant_results.csv", row.names = FALSE)
-  write.csv(tukey_res, "tukey_all_results.csv", row.names = FALSE)
-  write.csv(tukey_sig, "tukey_significant_results.csv", row.names = FALSE)
+  write.csv(anova_res, output_path("anova_all_results.csv"), row.names = FALSE)
+  write.csv(anova_res %>% filter(padj < fdr_threshold), output_path("anova_significant_results.csv"), row.names = FALSE)
+  write.csv(tukey_res, output_path("tukey_all_results.csv"), row.names = FALSE)
+  write.csv(tukey_sig, output_path("tukey_significant_results.csv"), row.names = FALSE)
 }
 
 # Export normalized data matrix and metadata
 x_norm_export <- x_norm %>%
   as.data.frame() %>%
   tibble::rownames_to_column("Metabolite")
-write.csv(x_norm_export, "normalized_data_matrix.csv", row.names = FALSE)
-write.csv(meta, "sample_metadata.csv", row.names = FALSE)
+write.csv(x_norm_export, output_path("normalized_data_matrix.csv"), row.names = FALSE)
+write.csv(meta, output_path("sample_metadata.csv"), row.names = FALSE)
 
 
 #----- Dynamic summary statistics ----- #
@@ -877,7 +1013,7 @@ pairwise_summary <- do.call(rbind, lapply(names(res_pairwise_list), function(com
   
 }))
 
-write.csv(pairwise_summary, "summary_statistics_pairwise.csv", row.names = FALSE)
+write.csv(pairwise_summary, output_path("summary_statistics_pairwise.csv"), row.names = FALSE)
 
 # ANOVA summary only for 3+ groups 
 if(n_groups > 2){
@@ -898,7 +1034,7 @@ if(n_groups > 2){
     )
   )
   
-  write.csv(anova_summary, "summary_statistics_anova.csv", row.names = FALSE)
+  write.csv(anova_summary, output_path("summary_statistics_anova.csv"), row.names = FALSE)
   
 }
 
