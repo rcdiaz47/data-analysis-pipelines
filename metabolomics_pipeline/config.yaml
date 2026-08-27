@@ -1,0 +1,16 @@
+input_file: "2Group_test_metabolomics.xlsx"
+
+n_groups : 2
+
+group_names:
+- "WT"
+- "WRN"
+
+output_dir: "results"
+
+fdr_threshold: 0.05
+logfc_threshold: 1
+missingness_threshold: 0.70
+
+name_column: "Name"
+sample_area_prefix: "Group_Area"
