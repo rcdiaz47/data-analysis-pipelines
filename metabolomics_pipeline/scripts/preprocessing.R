@@ -80,7 +80,88 @@ if(!name_column %in% colnames(cd)){
 
 # ----- Clean metabolite names ----- 
 
-process_metabolite_names <- function
+process_metabolite_names <- function(x, max_length = 40){
+  x <- gsub("\\s+", " ", x)
+  x <- trimws(x)
+  
+  ifelse(
+    nchar(x) > max_length, paste0(substr(x,1,max_length-3), "..."), x
+  )
+}
+
+cd$feature_id <- cd[[name_column]]
+cd$display_name <- process_metabolite_names(cd$feature_id)
+
+# ----- Identify sample-area columns ------- 
+
+area_cols <- grep(paste0("^", sample_area_prefix),
+                  colnames(cd),
+                  value = TRUE
+)
+
+# exclude blanks and qcs
+area_cols <- area_cols[!grepl("blank|QC", area_cols, ignore.case = TRUE)]
+
+# Confirm that sample columns were found
+if(length(area_cols) == 0){
+  stop(
+    paste0(
+      "No sample-area columns were found.\n",
+      "Expected column names beginning with '",
+      sample_area_prefix,
+      "'."
+    )
+  )
+}
+
+# ------ Build and validate the numeric matrix ------- 
+
+# Confirm that all the selected sample columns are numeric
+non_numeric_columns <- area_cols[!vapply(cd[area_cols], is.numeric, logical(1))]
+
+if(length(non_numeric_columns) > 0){
+  stop(
+    paste0(
+      "The following sample-area columns are not numeric:\n",
+      paste(non_numeric_columns, collapse = ", ")
+    )
+  )
+}
+
+# Build the numeric matrix 
+x <- cd %>%
+  dplyr::select(all_of(area_cols)) %>% as.matrix()
+
+# Create unique identifiers for duplicates without changing the original names
+feature_key <- make.unique(
+  as.character(cd$feature_id),
+  sep = "_duplicate_"
+)
+
+
+rownames(x) <- feature_key
+
+# Validate the completed matrix 
+if(any(colSums(!is.na(x)) == 0)){
+  empty_samples <- colnames(x)[colSums(!is.na(x)) == 0]
+  
+  stop(
+    paste0(
+      "The following samples contain no numeric values:\n",
+      paste(empty_samples, collapse = ", ")
+    )
+  )
+}
+
+
+
+
+
+
+
+
+
+
 
 
 
