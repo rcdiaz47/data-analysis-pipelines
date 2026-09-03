@@ -17,16 +17,15 @@ library(vegan)
 
 # Input file path
 
-input_file <- "2Group_test_metabolomics.xlsx"
+input_file <- "PS_9877731_Pos_CD_Results_Sample_names_added.xlsx"
 
 # Number of groups to be tested in experiment
 # 2 = t-test only
 # 3+ = ANOVAA + Tukey + Pairwise analysis
-
-n_groups <- 2
+n_groups <- 5
 
 # Group names must match sample column names
-group_names <- c("WT", "WRN")
+group_names <- c("Untransfected", "Wild_type", "S90G_mutant1", "G97L_mutant2", "W520X_mutant3")
 
 # Output directory for plots and csv files ("./) for current directory
 output_dir <- "./results"
@@ -41,7 +40,7 @@ logfc_threshold <- 1
 name_column <- "Name"
 
 # Prefix used to identify peak area columns
-sample_area_prefix <- "Group Area:"
+sample_area_prefix <- "Area:"
 
 
 #=========================================
@@ -93,7 +92,6 @@ if(!name_column %in% colnames(cd)){
 }
 
 
-# Validate that the name column exists 
 
 # ------ Clean and shorten the metabolite names for readability ------ #
 process_metabolite_names <- function(x, max_length = 40){
@@ -122,7 +120,7 @@ cd[[name_column]] <- process_metabolite_names(cd[[name_column]], max_length = 40
 area_cols <- grep(paste0("^", sample_area_prefix), colnames(cd), value = TRUE)
 
 # Exclude blanks and QCs from the analysis
-area_cols <- area_cols[!grepl("Blank|blank|BLANK|QC|Qc", area_cols)]
+area_cols <- area_cols[!grepl("Blank|blank|BLANK|QC|Qc|Empty", area_cols)]
 
 # Area columns check
 if (length(area_cols) == 0){
@@ -573,7 +571,7 @@ cat("Output Datasets Created\n")
 cat("=========================================\n")
 
 if(n_groups >2){
-  cat("\nANOVA & Tuket Datasets:\n")
+  cat("\nANOVA & Tukey Datasets:\n")
   cat(" - anova_res:", nrow(anova_res), "metabolites\n")
   cat(" - anova_significant_features_clean:", length(anova_significant_features_clean), "metabolites\n")
   cat(" - tukey_res:", nrow(tukey_res), "rows\n")
