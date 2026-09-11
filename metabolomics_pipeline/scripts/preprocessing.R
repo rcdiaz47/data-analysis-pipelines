@@ -154,6 +154,114 @@ if(any(colSums(!is.na(x)) == 0)){
 }
 
 
+# ----- Load the sample -> group mapping file ----- 
+
+group_mapping_file <- config$group_mapping_file 
+
+if(!file.exists(group_mapping_file)){
+  stop(
+    paste0(
+      "Group mapping file not found: ",
+      group_mapping_file,
+      "\nExpected a CSV with columns 'sample' and 'group'."
+    )
+  )
+}
+
+group_map <- read.csv(group_mapping_file, stringsAsFactors = FALSE)
+
+if(!all(c("sample", "group") %in% colnames(group_map))){
+  stop("group_mapping_file must contain 'sample' and 'group' columns.")
+}
+
+# Confirm every sample-area column has a matching entry in the mapping file
+missing_from_map <- setdiff(area_cols, group_map$sample)
+
+if(length(missing_from_map) > 0){
+  stop(
+    paste0(
+      "The following sample columns have no entry in the group mapping file:\n",
+      paste(missing_from_map, collapse = ", ")
+    )
+  )
+}
+
+# Confirm every group in the mapping file is one of the configured group_names
+unknown_groups <- setdiff(unique(group_map$group), group_names)
+
+if(length(unknown_groups) > 0){
+  stop(
+    paste0(
+      "The group mapping gile referencens group(s) not listed in config.yaml group_names:\n",
+      paste(unknown_groups, collapse = ", ")
+    )
+  )
+}
+
+# Build sample metadata in the same order as the columns of x
+meta <- data.frame(
+  Sample = area_cols,
+  Group = group_map$group[match(area_cols, group_map$sample)],
+  stringsAsFactors = FALSE
+)
+
+# ----- Log2 transform ------ #
+x[x == ""] <- NA
+x_log <- log2(x)
+
+# ----- Filter metabolites by missingness ------ #
+# NOTE : despite the name, missingness_threshold is used as a PRESENCE-rate cutoff here
+
+# Keep features present in at least missingness_threshold of samples
+
+keep <- rowMeans(!is.na(x_log)) >= missingness_threshold
+
+x_filt <- x_log[keep, ]
+
+# ----- Normalize using median centering ----- #
+column_median <- apply(x_filt, 2, median, na.rm = TRUE)
+x_norm <- sweep(x_filt, 2, column_median, FUN = "-")
+
+# ----- Export normalized matrix and sample metadata ----- #
+x_norm_export <- x_norm %>% as.data.frame() %>% tibble::rownames_to_column("feature_id")
+
+write.csv(x_norm_export, intermediate_path("normalized_matris.csv"), row.names = FALSE)
+
+write.csv(meta, intermediate_path("sample_metadata.csv"), row.names = FALSE)
+
+cat("Preprocessing complete.\n")
+cat("- Metabolites before filtering:", nrow(x_log), "\n")
+cat("- Metabolites after filtering (>=", missingness_threshold * 100, "% present):",
+    nrow(x_norm), "\n")
+cat("- Samples:", ncol(x_norm), "\n")
+cat(" - Output written to:", intermediate_dir, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

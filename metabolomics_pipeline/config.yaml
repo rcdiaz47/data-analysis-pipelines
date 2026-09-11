@@ -14,3 +14,8 @@ missingness_threshold: 0.70
 
 name_column: "Name"
 sample_area_prefix: "Group_Area"
+
+# CSV with 2 columns: sample and group
+# 'Sample' values must match the sample-area column names *(after the prefix)
+
+group_mapping_files: "group_mapping.csv"
