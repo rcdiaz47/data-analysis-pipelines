@@ -1,10 +1,14 @@
-input_file: "2Group_test_metabolomics.xlsx"
+input_file: "C:\\Users\\Proteomics\\Documents\\PS_9877731_Pos_CD_Results_Sample_names_added.xlsx"
 
-n_groups : 2
+n_groups : 6
 
 group_names:
-- "WT"
-- "WRN"
+- "Untransfected"
+- "Wild_type"
+- "S90G_mutant1"
+- "G97L_mutant2"
+- "Empty"
+- "W520X_mutant3"
 
 output_dir: "results"
 
@@ -12,10 +16,10 @@ fdr_threshold: 0.05
 logfc_threshold: 1
 missingness_threshold: 0.70
 
-name_column: "Name"
-sample_area_prefix: "Group_Area"
+name_column: "Name" 
+sample_area_prefix: "Area"
 
 # CSV with 2 columns: sample and group
 # 'Sample' values must match the sample-area column names *(after the prefix)
 
-group_mapping_files: "group_mapping.csv"
+group_mapping_file: "C:\\Users\\Proteomics\\Documents\\group_mapping.csv"

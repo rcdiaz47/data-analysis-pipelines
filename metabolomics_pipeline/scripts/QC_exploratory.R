@@ -4,7 +4,7 @@ library(yaml)
 library(ggplot2)
 
 # read the pipeline configuration
-config <- yaml::read_yaml("config.yaml")
+config <- yaml::read_yaml("C:\\Users\\Proteomics\\Documents\\data-analysis-pipelines\\metabolomics_pipeline\\config.yaml")
 
 output_dir <- config$output_dir
 

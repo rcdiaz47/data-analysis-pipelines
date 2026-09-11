@@ -3,7 +3,7 @@ library(readxl)
 library(yaml)
 
 # read the pipeline configuration
-config <- yaml::read_yaml("config.yaml")
+config <- yaml::read_yaml("C:\\Users\\Proteomics\\Documents\\data-analysis-pipelines\\metabolomics_pipeline\\config.yaml")
 
 # assign configuration values 
 input_file <- config$input_file 
@@ -185,6 +185,10 @@ if(length(missing_from_map) > 0){
     )
   )
 }
+
+group_map$sample <- trimws(group_map$sample)
+group_map$group <- trimws(group_map$group)
+group_names <- trimws(group_names)
 
 # Confirm every group in the mapping file is one of the configured group_names
 unknown_groups <- setdiff(unique(group_map$group), group_names)
