@@ -251,7 +251,7 @@ x_norm <- sweep(x_filt, 2, column_median, FUN = "-")
 # ----- Export normalized matrix and sample metadata ----- #
 x_norm_export <- x_norm %>% as.data.frame() %>% tibble::rownames_to_column("feature_id")
 
-write.csv(x_norm_export, intermediate_path("normalized_matris.csv"), row.names = FALSE)
+write.csv(x_norm_export, intermediate_path("normalized_matrix.csv"), row.names = FALSE)
 
 write.csv(meta, intermediate_path("sample_metadata.csv"), row.names = FALSE)
 

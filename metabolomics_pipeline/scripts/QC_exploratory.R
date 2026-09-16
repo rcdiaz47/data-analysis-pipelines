@@ -16,7 +16,7 @@ output_path <- function(filename){
 }
 
 # ----- Read preprocessed data ----- #
-norm_matrix_path <- file.path(intermediate_dir, "normalized_matris.csv")
+norm_matrix_path <- file.path(intermediate_dir, "normalized_matrix.csv")
 metadata_path <- file.path(intermediate_dir, "sample_metadata.csv")
 
 if(!file.exists(norm_matrix_path)){

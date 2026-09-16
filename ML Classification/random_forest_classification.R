@@ -197,7 +197,7 @@ rf_model <- randomForest(
 print(rf_model)
 
 # ----- Extract feature importance ----- 
-# Random Forest tracks  how much each metabolite contributed to classifications
+# Random Forest tracks how much each metabolite contributed to classifications
 # MeanDecreasedGini: how much each feature improves node purity across all trees
 # Higher values = more important for distinguishing the groups 
 # top_features comes from user config section

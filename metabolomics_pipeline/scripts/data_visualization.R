@@ -40,7 +40,7 @@ if(!file.exists(comparison_names_path)){
 
 comparison_names <- readLines(comparison_names_path)
 
-x_norm_df <- read.csv(intermediate_path("normalized_matris.csv"), stringsAsFactors = FALSE, check.names = FALSE)
+x_norm_df <- read.csv(intermediate_path("normalized_matrix.csv"), stringsAsFactors = FALSE, check.names = FALSE)
 meta <- read.csv(intermediate_path("sample_metadata.csv"), stringsAsFactors = FALSE)
 
 x_norm <- x_norm_df %>%
@@ -52,7 +52,7 @@ res_pairwise_list <- lapply(comparison_names, function(comparison_name){
   
   clean_comparison <- gsub(" ", "_", comparison_name)
   read.csv(
-    intermediate_path(paste0("pairwise_", clean_comparison, "full.csv")),
+    intermediate_path(paste0("pairwise_", clean_comparison, "_full.csv")),
     stringsAsFactors = FALSE
   )
   

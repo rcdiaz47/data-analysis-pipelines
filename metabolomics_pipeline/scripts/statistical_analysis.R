@@ -21,7 +21,7 @@ fdr_threshold <- 0.05
 logfc_threshold <- 1
 
 # ------ Read preprocessed data ------ #
-norm_matrix_path <- file.path(intermediate_dir, "normalized_matris.csv")
+norm_matrix_path <- file.path(intermediate_dir, "normalized_matrix.csv")
 metadata_path <- file.path(intermediate_dir, "sample_metadata.csv")
 
 if(!file.exists(norm_matrix_path)){
@@ -224,7 +224,7 @@ for(comparison_name in names(res_pairwise_list)){
   
   write.csv(
     res_pairwise_list[[comparison_name]],
-    intermediate_path(paste0("pairwise_", clean_comparison,"full.csv")),
+    intermediate_path(paste0("pairwise_", clean_comparison,"_full.csv")),
     row.names = FALSE
   )
   
