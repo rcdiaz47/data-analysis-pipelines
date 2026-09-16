@@ -16,7 +16,7 @@ output_path <- function(filename){
 }
 
 # ----- Read preprocessed data ----- #
-norm_matrix_path <- file.path(intermediate_dir, "normalized_matrix.csv")
+norm_matrix_path <- file.path(intermediate_dir, "normalized_matris.csv")
 metadata_path <- file.path(intermediate_dir, "sample_metadata.csv")
 
 if(!file.exists(norm_matrix_path)){
@@ -37,7 +37,7 @@ if(!file.exists(metadata_path)){
   )
 }
 
-x_norm_df <- read.csv(norm_matrix_path, stringsAsFactors = FALSE)
+x_norm_df <- read.csv(norm_matrix_path, stringsAsFactors = FALSE, check.names = FALSE)
 meta <- read.csv(metadata_path, stringsAsFactors = )
 
 # Rebuild the matrix with feature_id as rownames
@@ -90,6 +90,47 @@ pca_plot <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Group)) +
 pdf(output_path("pca_plot.pdf"), width = 8, height = 6)
 print(pca_plot)
 dev.off()
+
+# ------ Internal standard QC ------ #
+
+is_qc_path <- intermediate_path("internal_standard_qc.csv")
+
+if(file.exists(is_qc_path)){
+  is_df <- read.csv(is_qc_path, stringsAsFactors = FALSE, check.names = FALSE)
+  
+  is_long <- is_df %>%
+    pivot_longer(-feature_id, names_to = "sample", values_to = "intensity") %>%
+    left_join(meta, by = c("sample" = "Sample"))
+  
+  is_plot <- ggplot(is_long, aes(x = sample, y = intensity, color = Group)) +
+    geom_point(size = 2) +
+    facet_wrap(~feature_id, scales = "free_y", ncol = 2) +
+    labs(title = "Internal Standard QC", x = "", y = "Raw Peak Area") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+  
+  pdf(output_path("internal_standard_qc.pdf"), width = 10, height = 8)
+  print(is_plot)
+  dev.off()
+  
+  is_cv <- is.long %>%
+    group_by(feature) %>%
+    summarise(
+      mean_intensity = mean(intensity, na.rm = TRUE),
+      sd_intensity = sd(intensity, na.rm = TRUE),
+      cv_percent = round(100*sd_intensity/mean_intensity, 1)
+    )
+  
+  write.csv(is_cv, output_path("internal_standard_cv.csv"), row.names = FALSE)
+  cat("Internal standard QC: CV summary written to internal_standard_cv.csv\n")
+  print(is_cv)
+  
+}else {
+  
+  cat("No internal standard QC file founf- skipping IS QC plot\n")
+  
+}
+
 
 cat("QC / exploratory analysis complete.\n")
 cat(" - Features used in PCA (complete cases):", ncol(x_pca), "\n")

@@ -21,8 +21,8 @@ fdr_threshold <- 0.05
 logfc_threshold <- 1
 
 # ------ Read preprocessed data ------ #
-norm_matrix_path <- intermediate_path("normalized_matrix.csv")
-metadata_path <- intermediate_path("sample_metadata.csv")
+norm_matrix_path <- file.path(intermediate_dir, "normalized_matris.csv")
+metadata_path <- file.path(intermediate_dir, "sample_metadata.csv")
 
 if(!file.exists(norm_matrix_path)){
   stop(
@@ -42,7 +42,7 @@ if(!file.exists(metadata_path)){
   )
 }
 
-x_norm_df <- read.csv(norm_matrix_path, stringsAsFactors = FALSE)
+x_norm_df <- read.csv(norm_matrix_path, stringsAsFactors = FALSE, check.names = FALSE)
 meta <- read.csv(metadata_path, stringsAsFactors = FALSE)
 
 x_norm <- x_norm_df %>%
@@ -164,12 +164,13 @@ if(n_groups == 2){
 }
 
 # ------ Add significance labels to each pairwise comparison ------- #
-res_pairwise_list <- lappy(res_pairwise_list, function(res){
+res_pairwise_list <- lapply(res_pairwise_list, function(res){
   
   res$significance  <- "Not Significant"
   res$significance[res$padj < fdr_threshold & res$logFC > logfc_threshold] <- "Up"
   res$significance[res$padj < fdr_threshold & res$logFC < -logfc_threshold] <- "Down"
   
+  res
   
 })
 

@@ -154,6 +154,28 @@ if(any(colSums(!is.na(x)) == 0)){
 }
 
 
+# ------ Identify and export internal standard raw signal for QC ------ #
+
+is_pattern <- "-d[0-9]+$"
+is_rows <- grepl(is_pattern, trimws(cd$feature_id))
+
+if(any(is_rows)){
+  
+  is_data <- x[is_rows, drop = FALSE]
+  rownames(is_data) <- feature_key[is_rows]
+  
+  is_export <- is_data %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("feature_id")
+  
+  write.csv(is_export, intermediate_path("internal_standard_qc.csv"), row.names = FALSE)
+  cat("Internal standard QC: found", sum(is_rows), "IS feature(s), exported to internal_standard_qc.csv\n")
+  
+} else{
+  cat("Internal Standard QC: no features matched pattern '", is_pattern, "' - skipping\n")
+}
+
+
 # ----- Load the sample -> group mapping file ----- 
 
 group_mapping_file <- config$group_mapping_file 

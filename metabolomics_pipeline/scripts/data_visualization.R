@@ -6,7 +6,7 @@ library(ggplot2)
 library(ggrepel)
 
 # read the pipeline configurations
-config <- yaml::read_yaml("C:\\Users\Proteomics\\Documents\\data-analysis-pipelines\\metabolomics_pipeline\\config.yaml")
+config <- yaml::read_yaml("C:\\Users\\Proteomics\\Documents\\data-analysis-pipelines\\metabolomics_pipeline\\config.yaml")
 
 output_dir <- config$output_dir
 n_groups <- config$n_groups
@@ -40,7 +40,7 @@ if(!file.exists(comparison_names_path)){
 
 comparison_names <- readLines(comparison_names_path)
 
-x_norm_df <- read.csv(intermediate_path("normalized_matrix.csv"), stringsAsFactors = FALSE)
+x_norm_df <- read.csv(intermediate_path("normalized_matris.csv"), stringsAsFactors = FALSE, check.names = FALSE)
 meta <- read.csv(intermediate_path("sample_metadata.csv"), stringsAsFactors = FALSE)
 
 x_norm <- x_norm_df %>%
@@ -48,11 +48,11 @@ x_norm <- x_norm_df %>%
   as.matrix()
 
 # Read each comparisons pairwise results into a named list 
-res_pairwise_list <- lappy(comparison_names, function(comparison_name){
+res_pairwise_list <- lapply(comparison_names, function(comparison_name){
   
   clean_comparison <- gsub(" ", "_", comparison_name)
   read.csv(
-    intermediate_path(paste0("pairwise_", clean_comparison, "_full.csv")),
+    intermediate_path(paste0("pairwise_", clean_comparison, "full.csv")),
     stringsAsFactors = FALSE
   )
   
@@ -140,12 +140,12 @@ plot_volcano <- function(res, title, top_n = 35){
 
 # ------ Fold change bar plots function -----#
 
-plot_fc_barplot <- function(res, comparison_name, n_metanolites = 20){
+plot_fc_barplot <- function(res, comparison_name, n_metabolites = 20){
   
   top_fc <- res %>% 
     filter(padj < fdr_threshold) %>%
     arrange(desc(abs(logFC))) %>% 
-    slice_head(n = n_metanolites)
+    slice_head(n = n_metabolites)
   
   groups <- strsplit(comparison_name, "vs")[[1]]
   group1 <- groups[1]
@@ -209,17 +209,20 @@ for(comparison_name in names(res_pairwise_list)){
   if(length(top_metabs) == 0){
     
     cat("No significant metabolites for", comparison_name, "- skipping heatmap.\n")
+    next
   }
   
   heat_data <- x_norm[top_metabs, , drop = FALSE]
   
-  pdf(output_path(paste0("heatmap_", comparison_name, ".pdf")), width = 12, height = 12)
+  can_cluster_rows <- nrow(heat_data >=2)
+  
+  pdf(output_path(paste0("heatmap_", clean_comparison, ".pdf")), width = 12, height = 12)
   print(pheatmap(
     
     heat_data,
     scale = "row",
     annotation_col = annotation_col,
-    cluster_rows = TRUE,
+    cluster_rows = can_cluster_rows,
     cluster_cols = TRUE,
     clustering_distance_rows = "correlation",
     clustering_distance_cols = "correlation",
@@ -243,7 +246,7 @@ if(n_groups > 2){
   anova_all_path <- intermediate_path("anova_all_results.csv")
   anova_sig_path <- intermediate_path("anova_significant_results.csv")
   
-  if(!file.path(anova_all_path) || !file.exists(anova_sig_path)){
+  if(!file.exists(anova_all_path) || !file.exists(anova_sig_path)){
     
     stop(
       paste0(
