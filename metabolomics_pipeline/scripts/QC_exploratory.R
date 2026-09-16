@@ -93,7 +93,7 @@ dev.off()
 
 # ------ Internal standard QC ------ #
 
-is_qc_path <- intermediate_path("internal_standard_qc.csv")
+is_qc_path <- file.path(intermediate_dir, "internal_standard_qc.csv")
 
 if(file.exists(is_qc_path)){
   is_df <- read.csv(is_qc_path, stringsAsFactors = FALSE, check.names = FALSE)
@@ -113,8 +113,8 @@ if(file.exists(is_qc_path)){
   print(is_plot)
   dev.off()
   
-  is_cv <- is.long %>%
-    group_by(feature) %>%
+  is_cv <- is_long %>%
+    group_by(feature_id) %>%
     summarise(
       mean_intensity = mean(intensity, na.rm = TRUE),
       sd_intensity = sd(intensity, na.rm = TRUE),

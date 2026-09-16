@@ -161,7 +161,7 @@ is_rows <- grepl(is_pattern, trimws(cd$feature_id))
 
 if(any(is_rows)){
   
-  is_data <- x[is_rows, drop = FALSE]
+  is_data <- x[is_rows, ,drop = FALSE]
   rownames(is_data) <- feature_key[is_rows]
   
   is_export <- is_data %>%
