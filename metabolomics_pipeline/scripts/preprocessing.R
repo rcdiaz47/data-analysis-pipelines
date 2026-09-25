@@ -100,7 +100,7 @@ area_cols <- grep(paste0("^", sample_area_prefix),
 )
 
 # exclude blanks and qcs
-area_cols <- area_cols[!grepl("blank|QC", area_cols, ignore.case = TRUE)]
+area_cols <- area_cols[!grepl("blank|QC|Empty", area_cols, ignore.case = TRUE)]
 
 # Confirm that sample columns were found
 if(length(area_cols) == 0){

@@ -2,6 +2,7 @@
 library(tidyverse)
 library(yaml)
 library(ggplot2)
+library(ggrepel)
 
 # read the pipeline configuration
 config <- yaml::read_yaml("C:\\Users\\Proteomics\\Documents\\data-analysis-pipelines\\metabolomics_pipeline\\config.yaml")
@@ -75,6 +76,7 @@ pca_scores <- pca_scores %>% left_join(meta, by = "Sample")
 
 pca_plot <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Group)) +
   geom_point(size = 3) +
+  geom_text_repel(aes(label = Sample), size = 2.5, show.legend = FALSE) +
   stat_ellipse(
     aes(fill = Group),
     geom = "polygon",
@@ -90,6 +92,25 @@ pca_plot <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Group)) +
 pdf(output_path("pca_plot.pdf"), width = 8, height = 6)
 print(pca_plot)
 dev.off()
+
+# ------ PC1 by batch ------ #
+# Direct check: does PC1 differ between the two batched?
+
+sample_number <- as.numeric(gsub("Area:\\s*(\\d+)_.*", "\\1", meta$Sample))
+meta$Batch <- ifelse(sample_number <=50, "Batch 1 (39-50)", "Batch 2 (51-60)")
+
+pca_scores$Batch <- meta$Batch[match(pca_scores$Sample, meta$Sample)]
+
+pca1_batch_plot <- ggplot(pca_scores, aes(x = reorder(Sample, PC1), y = PC1, fill = Batch)) +
+  geom_col() +
+  labs(title = "PC1 Score by sample and Batch", x = "", y = "PC1") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6))
+
+pdf(output_path("pc1_by_batch.pdf"), width = 10, height = 6)
+print(pca1_batch_plot)
+dev.off()
+  
 
 # ------ Internal standard QC ------ #
 

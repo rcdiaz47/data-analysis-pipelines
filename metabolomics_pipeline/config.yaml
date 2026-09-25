@@ -1,14 +1,14 @@
-input_file: "C:\\Users\\Proteomics\\Documents\\PS_9877731_Pos_CD_Results_Sample_names_added.xlsx"
+input_file: "C:\\Users\\Proteomics\\Documents\\PS_922324_Pos_CD_Results_samples_added.xlsx"
 
 n_groups : 6
 
 group_names:
 - "Untransfected"
 - "Wild_type"
-- "S90G_mutant1"
-- "G97L_mutant2"
+- "G101L"
+- "G103L"
 - "Empty"
-- "W520X_mutant3"
+- "G105L"
 
 output_dir: "results"
 
